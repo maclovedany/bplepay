@@ -23,7 +23,7 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
   const withPoly = await repo.getRegion(r.id);
   assert.equal(withPoly.source_kind, 'adm');
   assert.deepEqual(withPoly.bbox, [0, 0, 1, 1]);
-  assert.equal(await repo.findRegionBySourceKey(withPoly.source_key), null, 'not ready yet');
+  assert.equal((await repo.findRegionBySourceKey(withPoly.source_key)).id, r.id, 'found even while collecting (same-polygon requests merge instead of colliding)');
 
   await repo.upsertPlaces([{ naver_id: pid, name: '식당', category: '한식', road_address: 'x', address: 'y', phone: null, lng: 0.5, lat: 0.5 }]);
   await repo.linkPlaces(r.id, [pid]);
