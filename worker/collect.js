@@ -11,6 +11,11 @@ export async function collectRegion(repo, region, { runRepl, log = () => {} }) {
     }
     const source_key = r.kind + ':' + r.key;
     const existing = await repo.findRegionBySourceKey(source_key);
+    if (existing && existing.status === 'failed') {
+      // 같은 구획이 이미 실패한 적이 있으면 같은 이유로 실패시킨다 (유니크 키 충돌 방지).
+      await repo.failRegion(region.id, existing.error || MESSAGES.NO_POLYGON);
+      return;
+    }
     if (existing) {
       await repo.mergeRegion(region.id, existing.id, region.query);
       log(`merged into #${existing.id} (${r.name})`);

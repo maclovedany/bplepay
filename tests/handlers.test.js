@@ -140,3 +140,43 @@ test('GET stats json', async () => {
   await createHandlers(fakeRepo()).statsGet({ method: 'GET', query: {} }, res);
   assert.equal(res.body.all.name, '합계');
 });
+
+// ---- 리뷰 반영: 재시도·대기열·병합 대상 삭제 ----
+test('GET collecting that the worker has started stays collecting even past 3 minutes', async () => {
+  const created = Date.parse('2026-11-03T00:00:00Z');
+  const repo = fakeRepo({ regions: { 5: { id: 5, query: 'x', name: 'x', status: 'collecting', created_at: new Date(created).toISOString(), started_at: new Date(created + 3.5 * 60000).toISOString() } } });
+  const res = fakeRes();
+  await createHandlers(repo, { now: () => created + 4 * 60000 }).regionGet({ method: 'GET', query: { id: '5' } }, res);
+  assert.equal(res.body.region.status, 'collecting');
+  assert.equal(repo.calls.length, 0);
+});
+
+test('GET collecting started more than 5 minutes ago → failed with timeout error', async () => {
+  const created = Date.parse('2026-11-03T00:00:00Z');
+  const repo = fakeRepo({ regions: { 5: { id: 5, query: 'x', name: 'x', status: 'collecting', created_at: new Date(created).toISOString(), started_at: new Date(created + 60000).toISOString() } } });
+  const res = fakeRes();
+  await createHandlers(repo, { now: () => created + 7 * 60000 }).regionGet({ method: 'GET', query: { id: '5' } }, res);
+  assert.equal(res.body.region.status, 'failed');
+  assert.match(res.body.region.error, /^수집 중 오류: 시간 초과/);
+});
+
+test('POST query whose merged target was deleted resets it to collecting', async () => {
+  const repo = fakeRepo({ regions: { 3: { id: 3, query: '삼덕동', status: 'merged', merged_into: null } } });
+  const res = fakeRes();
+  await createHandlers(repo).regionsCreate({ method: 'POST', body: { query: '삼덕동' } }, res);
+  assert.deepEqual(res.body, { id: 3, status: 'collecting' });
+  assert.deepEqual(repo.calls, [['resetToCollecting', 3]]);
+});
+
+test('GET merged region whose target was deleted → 404 with message', async () => {
+  const repo = fakeRepo({ regions: { 3: { id: 3, query: '삼덕동', status: 'merged', merged_into: null } } });
+  const res = fakeRes();
+  await createHandlers(repo).regionGet({ method: 'GET', query: { id: '3' } }, res);
+  assert.equal(res.statusCode, 404);
+});
+
+test('GET with non-numeric id → 400', async () => {
+  const res = fakeRes();
+  await createHandlers(fakeRepo()).regionGet({ method: 'GET', query: { id: 'abc' } }, res);
+  assert.equal(res.statusCode, 400);
+});

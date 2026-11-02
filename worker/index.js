@@ -25,6 +25,7 @@ while (running) {
   if (region) {
     const t0 = Date.now();
     log(`#${region.id} "${region.query}" 수집 시작`);
+    await repo.markStarted(region.id);
     await collectRegion(repo, region, { runRepl, log: (m) => log(`#${region.id} ${m}`) });
     const after = await repo.getRegion(region.id).catch(() => null);
     log(`#${region.id} "${region.query}" → ${after?.status ?? '?'}${after?.error ? ' (' + after.error + ')' : ''} ${Math.round((Date.now() - t0) / 1000)}s`);

@@ -12,6 +12,7 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
   const pid = 'p1' + q;
 
   const r = await repo.createRegion({ query: q, name: q });
+  try {
   assert.equal(r.status, 'collecting');
   assert.equal((await repo.nextCollecting()).id <= r.id, true);
 
@@ -50,13 +51,32 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
 
   await repo.failRegion(r2.id, 'oops');
   assert.equal((await repo.getRegion(r2.id)).error, 'oops');
+  const beforeReset = (await repo.getRegion(r2.id)).created_at;
+  await new Promise((res) => setTimeout(res, 1100));
   await repo.resetToCollecting(r2.id);
-  assert.equal((await repo.getRegion(r2.id)).status, 'collecting');
-  assert.equal((await repo.getRegion(r2.id)).error, null);
-  assert.deepEqual(await repo.staleCollecting(0), (await repo.staleCollecting(0)).filter(() => true));
+  const afterReset = await repo.getRegion(r2.id);
+  assert.equal(afterReset.status, 'collecting');
+  assert.equal(afterReset.error, null);
+  assert.equal(afterReset.started_at, null);
+  assert.ok(Date.parse(afterReset.created_at) > Date.parse(beforeReset), 'resetToCollecting refreshes created_at');
+  await repo.markStarted(r2.id);
+  assert.ok((await repo.getRegion(r2.id)).started_at, 'markStarted sets started_at');
 
-  await repo.deleteRegion(r2.id);
-  await repo.deleteRegion(r.id);
+  // PostgREST 1,000행 상한을 넘겨도 전부 읽는다
+  const many = Array.from({ length: 1205 }, (_, i) => ({ naver_id: `m${i}${q}`, name: 'm', category: null, road_address: null, address: null, phone: null, lng: 0.1, lat: 0.1 }));
+  await repo.upsertPlaces(many);
+  await repo.linkPlaces(r.id, many.map((m) => m.naver_id));
+  assert.equal((await repo.getRegionPlaces(r.id)).length, 1206);
+  const si2 = await repo.statsInput();
+  assert.equal(si2.links.filter((l) => l.region_id === r.id).length, 1206);
+  } finally {
+    const r2 = await repo.findRegionByQuery(q + 'b');
+    if (r2) await repo.deleteRegion(r2.id);
+    await repo.deleteRegion(r.id);
+    const db = getDb();
+    await db.from('surveys').delete().like('naver_id', '%' + q);
+    await db.from('places').delete().like('naver_id', '%' + q);
+  }
   assert.equal(await repo.getRegion(r.id), null);
   assert.equal(await repo.findAlias(q), null);
 });

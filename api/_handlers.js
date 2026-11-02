@@ -2,7 +2,8 @@ import { normalizeQuery } from '../lib/normalize.js';
 import { computeStats, statsToCsv } from '../lib/stats.js';
 import { MESSAGES } from '../lib/messages.js';
 
-const STALE_MS = 3 * 60 * 1000;
+const WAIT_MS = 3 * 60 * 1000;     // 워커가 집어 가지 않은 채 3분 → 워커가 꺼진 것으로 본다
+const RUN_MS = 5 * 60 * 1000;      // 집어 간 뒤 5분 → 수집 중 죽은 것으로 본다
 const SURVEY_VALUES = new Set(['yes', 'no', null]);
 
 const publicRegion = (r) => ({
@@ -31,7 +32,8 @@ export function createHandlers(repo, { now = () => Date.now() } = {}) {
       }
       const existing = await repo.findRegionByQuery(query);
       if (existing) {
-        if (existing.status === 'failed') {
+        const orphanMerge = existing.status === 'merged' && !existing.merged_into;
+        if (existing.status === 'failed' || orphanMerge) {
           await repo.resetToCollecting(existing.id);
           return res.status(200).json({ id: existing.id, status: 'collecting' });
         }
@@ -43,12 +45,20 @@ export function createHandlers(repo, { now = () => Date.now() } = {}) {
     },
 
     async regionGet(req, res) {
-      let region = await repo.getRegion(Number(req.query.id));
-      if (region && region.status === 'merged' && region.merged_into) region = await repo.getRegion(region.merged_into);
-      if (!region) return res.status(404).json({ error: 'not found' });
-      if (region.status === 'collecting' && now() - Date.parse(region.created_at) > STALE_MS) {
-        await repo.failRegion(region.id, MESSAGES.WORKER_DOWN);
-        region = { ...region, status: 'failed', error: MESSAGES.WORKER_DOWN };
+      const id = Number(req.query.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+      let region = await repo.getRegion(id);
+      if (region && region.status === 'merged') region = region.merged_into ? await repo.getRegion(region.merged_into) : null;
+      if (!region) return res.status(404).json({ error: '지역을 찾을 수 없습니다. 다시 검색해 주세요.' });
+      if (region.status === 'collecting') {
+        const t = now();
+        let error = null;
+        if (!region.started_at && t - Date.parse(region.created_at) > WAIT_MS) error = MESSAGES.WORKER_DOWN;
+        else if (region.started_at && t - Date.parse(region.started_at) > RUN_MS) error = '수집 중 오류: 시간 초과. 다시 시도해 주세요.';
+        if (error) {
+          await repo.failRegion(region.id, error);
+          region = { ...region, status: 'failed', error };
+        }
       }
       const out = { region: publicRegion(region) };
       if (region.status === 'ready') out.places = await repo.getRegionPlaces(region.id);
@@ -56,7 +66,9 @@ export function createHandlers(repo, { now = () => Date.now() } = {}) {
     },
 
     async regionDelete(req, res) {
-      await repo.deleteRegion(Number(req.query.id));
+      const id = Number(req.query.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ error: 'invalid id' });
+      await repo.deleteRegion(id);
       res.status(200).json({ ok: true });
     },
 

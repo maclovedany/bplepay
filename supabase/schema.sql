@@ -13,7 +13,8 @@ create table if not exists regions (
   status text not null default 'collecting' check (status in ('collecting','ready','failed','merged')),
   merged_into bigint references regions(id) on delete set null,
   error text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),   -- 마지막으로 수집을 요청한 때 (재시도 시 갱신)
+  started_at timestamptz                           -- 워커가 집어 간 때
 );
 
 create table if not exists region_aliases (

@@ -33,7 +33,7 @@ test('no_polygon → failRegion with NO_POLYGON', async () => {
 });
 
 test('existing source_key → mergeRegion, no places call', async () => {
-  const repo = fakeRepo({ existing: { id: 7 } });
+  const repo = fakeRepo({ existing: { id: 7, status: 'ready' } });
   const runRepl = fakeRunRepl({ region: { kind: 'develope', key: '3696089', name: '동성로로데오거리', feature: square } });
   await collectRegion(repo, region, { runRepl });
   assert.deepEqual(repo.calls, [['findRegionBySourceKey', 'develope:3696089'], ['mergeRegion', 42, 7, '동성로']]);
@@ -89,4 +89,20 @@ test('placesScript embeds bbox and limits', () => {
   assert.ok(s.includes('restaurant/list'));
   assert.ok(s.includes('display=100'));
   assert.ok(s.includes('function parseApolloState'));
+});
+
+// ---- 리뷰 반영: 같은 구획이 failed/collecting 으로 남아 있을 때 ----
+test('existing failed region with same source_key → fail with its error, no polygon write', async () => {
+  const repo = fakeRepo({ existing: { id: 7, status: 'failed', error: MESSAGES.TOO_WIDE } });
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '04150109', name: '교동', feature: square } });
+  await collectRegion(repo, region, { runRepl });
+  assert.deepEqual(repo.calls, [['findRegionBySourceKey', 'adm:04150109'], ['failRegion', 42, MESSAGES.TOO_WIDE]]);
+  assert.equal(runRepl.scripts.length, 1);
+});
+
+test('existing collecting region with same source_key → merge', async () => {
+  const repo = fakeRepo({ existing: { id: 7, status: 'collecting' } });
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square } });
+  await collectRegion(repo, region, { runRepl });
+  assert.deepEqual(repo.calls[1], ['mergeRegion', 42, 7, '동성로']);
 });
