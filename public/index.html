@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>비플페이 가맹점 현장조사 지도</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="panel" class="panel">
+      <div class="panel-top">
+        <a class="brand" href="/" title="비플페이 조사 지도"><span class="brand-mark">B</span></a>
+        <form id="search-form" class="search" autocomplete="off">
+          <span class="search-icon" aria-hidden="true"></span>
+          <input id="search-input" type="search" placeholder="지역 이름 (예: 동성로, 대구 중구 삼덕동)" enterkeyhint="search">
+          <button type="button" id="search-clear" class="search-clear" aria-label="지우기" hidden>×</button>
+        </form>
+        <a class="stats-link" href="/stats">통계</a>
+      </div>
+
+      <div id="panel-body" class="panel-body">
+        <section id="recent" class="recent">
+          <h2 class="section-title">최근 수집한 지역</h2>
+          <ul id="recent-regions" class="recent-list"></ul>
+          <p id="recent-empty" class="muted" hidden>아직 수집한 지역이 없습니다. 위에 지역 이름을 입력해 보세요.</p>
+        </section>
+
+        <section id="status" class="status" hidden>
+          <div id="status-collecting" hidden>
+            <p class="status-title">네이버 지도에서 수집 중…</p>
+            <p class="muted">30초~2분 걸립니다. <span class="dots"><i></i><i></i><i></i></span></p>
+          </div>
+          <div id="status-failed" hidden>
+            <p id="status-error" class="status-error"></p>
+            <button id="retry-btn" type="button" class="btn-retry">다시 시도</button>
+          </div>
+        </section>
+
+        <section id="region" class="region" hidden>
+          <div id="region-head" class="region-head">
+            <h2 id="region-name" class="region-name"></h2>
+            <p id="region-source" class="muted"></p>
+            <p id="region-stats" class="region-stats"></p>
+          </div>
+          <div id="filter-chips" class="chips" role="tablist">
+            <button type="button" class="chip is-active" data-filter="all">전체</button>
+            <button type="button" class="chip" data-filter="none">미조사</button>
+            <button type="button" class="chip" data-filter="yes">가능</button>
+            <button type="button" class="chip" data-filter="no">불가능</button>
+          </div>
+          <ul id="place-list" class="place-list"></ul>
+        </section>
+      </div>
+      <div id="sheet-handle" class="sheet-handle" aria-hidden="true"><span></span></div>
+    </aside>
+
+    <main id="map-wrap" class="map-wrap">
+      <div id="map"></div>
+      <div id="sheet" class="sheet" hidden>
+        <button type="button" id="sheet-close" class="sheet-close" aria-label="닫기">×</button>
+        <h3 id="sheet-name" class="sheet-name"></h3>
+        <p id="sheet-category" class="muted"></p>
+        <p id="sheet-address" class="sheet-address"></p>
+        <p id="sheet-phone" class="sheet-phone"></p>
+        <div class="sheet-actions">
+          <button type="button" id="btn-yes" class="btn-survey btn-yes">비플페이 가능</button>
+          <button type="button" id="btn-no" class="btn-survey btn-no">불가능</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>비플페이 조사 통계</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .stats-page { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; background: #fff; min-height: 100%; }
+    .stats-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .stats-head h1 { font-size: 20px; margin: 0; flex: 1; }
+    .btn-link { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: #fff; color: var(--text); min-height: 40px; display: inline-flex; align-items: center; }
+    .btn-link.primary { background: var(--green); color: #fff; border-color: var(--green); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--gray); font-weight: 600; font-size: 12px; }
+    tr.total td { font-weight: 700; background: #fafafa; }
+    td a { color: var(--blue); font-weight: 600; }
+    .btn-del { border: 1px solid #f1c4c4; color: #c0392b; background: #fff; border-radius: 6px; padding: 6px 10px; min-height: 32px; }
+    .note { color: var(--gray); font-size: 12px; margin-top: 10px; }
+    .wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="stats-page">
+    <div class="stats-head">
+      <a class="brand" href="/" title="지도로"><span class="brand-mark">B</span></a>
+      <h1>비플페이 가맹 조사 통계</h1>
+      <a class="btn-link" href="/">지도로</a>
+      <a class="btn-link primary" href="/api/stats?format=csv">CSV 다운로드</a>
+    </div>
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr><th>지역</th><th>식당 수</th><th>조사 완료</th><th>진행률(%)</th><th>가능</th><th>불가능</th><th>가맹률(%)</th><th></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note">합계는 여러 구획에 겹치는 식당을 한 번만 셉니다.</p>
+    <p id="msg" class="note"></p>
+  </div>
+  <script src="/stats.js"></script>
+</body>
+</html>
