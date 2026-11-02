@@ -21,6 +21,12 @@
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap',
   }).addTo(map);
+  // 핀이 수백 개라 이름표는 충분히 확대했을 때만 보인다.
+  const LABEL_ZOOM = 18;
+  const syncLabelZoom = () => map.getContainer().classList.toggle('show-labels', map.getZoom() >= LABEL_ZOOM);
+  map.on('zoomend', syncLabelZoom);
+  syncLabelZoom();
+  const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
 
   const api = async (path, opts = {}) => {
     const res = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts });
@@ -152,7 +158,9 @@
         style: { color: 'rgb(57,133,247)', weight: 2, fillColor: 'rgb(56,229,255)', fillOpacity: 0.15 },
         interactive: false,
       }).addTo(map);
-      map.fitBounds(polygonLayer.getBounds(), { padding: [20, 20] });
+      // 모바일에서는 아래 패널(46vh)에 가려지지 않게 아래쪽 여백을 준다.
+      const bottomPad = isMobile() ? Math.round(window.innerHeight * 0.46) + 10 : 20;
+      map.fitBounds(polygonLayer.getBounds(), { paddingTopLeft: [20, isMobile() ? 70 : 20], paddingBottomRight: [20, bottomPad] });
     }
     for (const p of state.places) addMarker(p);
     renderList();

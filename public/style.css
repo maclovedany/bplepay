@@ -156,10 +156,12 @@ button { font: inherit; cursor: pointer; }
   100% { transform: scale(1); opacity: 1; }
 }
 .pin-label {
+  display: none;
   position: absolute; top: 36px; left: 50%; transform: translateX(-50%);
   white-space: nowrap; font-size: 11px; font-weight: 600; color: #222;
   text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; pointer-events: none;
 }
+.show-labels .pin-label, .pin.is-selected .pin-label, .pin-yes .pin-label { display: block; }
 .pin.is-selected .pin-body { outline: 3px solid #ffd600; }
 
 /* ---------- 상세 시트 ---------- */
