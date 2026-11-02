@@ -1,0 +1,164 @@
+# 비플페이 가맹점 현장조사 지도 — 설계
+
+작성일 2026-11-03. 이 문서는 구현자가 작성자에게 되묻지 않고 계획을 세울 수 있도록 쓴 것이다.
+
+## 1. 의도
+
+비플페이(BC카드 지역화폐 앱) 가맹 여부는 공개 데이터가 없어 사람이 식당을 한 곳씩 찾아가 확인해야 한다. 조사원이 지역 이름 하나만 입력하면 그 지역의 구획과 식당 목록이 자동으로 만들어지고, 조사원은 현장에서 식당마다 "가능 / 불가능"만 누르면 되게 한다. 입력은 한 곳에 모여 지역별 가맹 현황 통계가 된다.
+
+## 2. 목표 · 비목표 · 안티목표
+
+**목표**
+
+- 조사원이 "동성로", "대구 중구 삼덕동"처럼 지역 이름을 입력하면, 그 자리에서 네이버 지도의 구획 폴리곤과 구획 안 식당 목록이 수집되어 지도에 표시된다.
+- 화면은 네이버 지도 PC 화면과 같은 구성이다. 왼쪽 목록 패널, 오른쪽 지도, 파란 구획, 식당 핀.
+- 핀 또는 목록 항목을 누르면 "비플페이 가능 / 불가능" 버튼이 뜨고, 누르는 즉시 저장된다.
+- "가능"으로 표시된 식당은 지도에서 형광색 테두리가 깜빡인다.
+- 지역별 통계(식당 수, 조사 완료, 가능, 불가능, 가맹률)와 전체 합계를 보여 준다.
+- 조사원 여러 명이 현장에서 휴대폰·노트북 브라우저로 동시에 쓴다. 로그인 없음.
+
+**비목표 (이번에 안 함)**
+
+- 사용자 계정, 로그인, 권한.
+- 조사원별·날짜별 통계, 이력 추적.
+- 이미 수집한 지역을 다시 긁어 갱신하는 기능.
+- 식당별 메모, 사진, 비고 입력.
+- 진짜 네이버 지도 타일 (네이버 지도 API 키가 생기면 교체).
+- 고정 도메인, 접근 제한(URL을 아는 사람은 누구나 입력 가능).
+
+**안티목표 (이렇게 되면 실패)**
+
+- 조사원이 지역 이름 외에 좌표, 코드, 설정을 입력해야 하는 것.
+- 한 조사원의 입력이 다른 조사원 화면에 반영되지 않는 것.
+- 휴대폰에서 버튼이 작아 잘못 누르기 쉬운 것.
+
+## 3. 제약
+
+- 식당·구획 데이터는 **Aside 브라우저로 네이버 지도를 직접 열어** 읽는다. 공개 API를 쓰지 않는다. (작성자의 결정)
+- Aside는 이 Mac에서만 돌아간다. 따라서 **수집 워커는 이 Mac에서** 돌고, 새 지역을 수집하는 동안에는 켜져 있어야 한다. 이미 수집한 지역을 보고 입력하는 것은 Mac이 꺼져 있어도 된다.
+- 호스팅은 Vercel, DB는 Supabase를 쓴다. (작성자의 결정)
+- Aside CLI는 `~/.local/bin/aside`에 설치되어 있다. REPL 호출 시 `--profile d4d99e82-0158-4eea-b75c-4ac08d71dc4a`를 반드시 붙인다(프로필 레지스트리 불일치 때문). Aside 클라우드 로그인은 필요 없다. Aside.app이 실행 중이어야 한다.
+- 네이버 지도 내부 경로는 비공식이라 언제든 바뀔 수 있다. 수집기는 한 파일에 격리하고, 깨졌을 때 조사원 화면에 "수집 실패" 메시지가 명확히 뜨게 한다.
+- 네이버 `/p/api/search/all`은 캡차 토큰이 필요해 직접 호출할 수 없다. 검색은 반드시 실제 페이지 UI(URL 진입)를 통해서 한다.
+
+## 4. 결정된 구조
+
+### 4.1 전체 구성
+
+```
+[조사원 휴대폰/노트북] --HTTPS--> [Vercel: 정적 프런트엔드 + 서버리스 API]
+                                           |
+                                           v
+                                   [Supabase Postgres]  <--폴링(3초)--  [이 Mac: 수집 워커]
+                                                                            `-- aside repl --> Aside 브라우저 --> map.naver.com
+```
+
+- **호스팅**: Vercel. `public/`의 정적 HTML/CSS/JS와 `api/` 폴더의 Node 서버리스 함수. 프레임워크 없이 Vercel 기본 라우팅을 쓴다. (작성자의 결정)
+- **DB**: Supabase Postgres. 서버리스 API와 수집 워커는 `service_role` 키로 접근한다. 브라우저는 Supabase에 직접 붙지 않고 Vercel API만 호출한다. 그래서 RLS는 켜 두되 정책을 따로 만들 필요가 없다. (작성자의 결정: Supabase)
+- **수집 워커**: 이 Mac에서 `npm run worker`로 계속 떠 있는 Node 프로세스. `regions`에서 `status='collecting'`인 행을 3초마다 폴링해 하나씩 처리한다(동시 1건). Aside가 이 Mac에만 있으므로 워커만 로컬이다.
+- **프런트엔드**: 빌드 도구 없는 정적 HTML/CSS/JS. 지도는 Leaflet + OpenStreetMap 타일. 네이버 지도풍 UI는 CSS로 구현한다.
+- **비밀값**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Vercel에는 환경변수로, Mac에는 `.env`로 둔다. `.env`는 저장소에 넣지 않는다.
+
+### 4.2 데이터 모델
+
+```
+regions   id, query(정규화한 입력), name(표시 이름), source_kind('develope'|'adm'),
+          source_key(adm 코드 또는 shapeKey id, UNIQUE), source_name(네이버 구획 이름),
+          polygon(GeoJSON 문자열), bbox(minx,miny,maxx,maxy),
+          status('collecting'|'ready'|'failed'), error, created_at
+region_aliases  query(PK, 정규화한 입력), region_id
+places    naver_id(PK), name, category, road_address, address, phone, lng, lat, created_at
+region_places  region_id, naver_id  (PK 복합)   -- 한 식당이 두 구획에 속할 수 있다
+surveys   naver_id(PK), status('yes'|'no'), updated_at
+```
+
+- 가맹 여부는 **식당의 속성**이므로 지역과 무관하게 `naver_id` 하나에 한 값이다. 같은 식당이 두 지역에 걸치면 양쪽에서 같은 값이 보인다.
+- 같은 입력을 다시 검색하면 기존 region을 그대로 돌려준다. 정규화는 공백 압축·양끝 공백 제거만 한다.
+- **같은 구획 합치기 (설계자의 결정)**: 입력이 달라도 네이버가 같은 구획을 돌려주면("삼덕동"과 "대구 중구 삼덕동") 같은 region이다. `regions`에 `source_key`(adm 코드 또는 shapeKey id)를 유니크로 두고, 수집 흐름은 구획을 먼저 확인해 기존 region이 있으면 식당 수집을 건너뛰고 그 region을 돌려준다. 다른 표기로 들어온 입력은 `region_aliases(query, region_id)`에 기록해 다음부터 바로 찾는다.
+- **지원 범위 (설계자의 결정)**: 동·거리·상권 수준만 지원한다. 식당 수집 중 bbox 분할 잎이 24개를 넘거나 REPL 120초 안에 끝나지 않으면 실패로 기록하고 메시지를 낸다. "범위가 너무 넓습니다. 동이나 거리 이름으로 검색해 주세요." 구·시 단위는 비목표.
+
+### 4.3 HTTP API
+
+```
+POST /api/regions          {query}      -> {id, status}   기존 지역이면 그 id, 없으면 수집 시작(비동기)
+GET  /api/regions                       -> [{id, name, status, stats}]
+GET  /api/regions/:id                   -> {region, polygon, places:[{..., survey}]}
+PUT  /api/places/:naverId/survey {status:'yes'|'no'|null} -> {ok}
+DELETE /api/regions/:id                 -> {ok}            지역·별칭·연결만 삭제, 식당·조사값은 유지
+GET  /api/stats                         -> {regions:[{name, total, surveyed, yes, no, rate}], all:{...}}
+```
+
+- 수집은 30초~2분 걸린다. 프런트는 `GET /api/regions/:id`를 2초마다 폴링해 `ready`가 되면 지도를 그린다. 워커가 꺼져 있으면 `collecting`이 그대로 멈추므로, API는 생성 후 3분이 지나도 `collecting`이면 `failed`로 바꾸고 "수집 워커가 꺼져 있습니다. 관리자에게 알려 주세요."를 error에 적는다.
+- 동시 입력 충돌은 **마지막 입력이 이긴다**. 프런트는 지역 화면이 열려 있는 동안 10초마다 다시 받아 다른 조사원의 입력을 반영한다.
+
+### 4.4 수집기 (검증된 네이버 접근 경로)
+
+수집기는 `worker/naver.js` 한 파일에 둔다. 워커가 `aside repl --profile <id> "<스크립트>"`를 자식 프로세스로 실행하고, 스크립트는 결과 JSON을 `console.log`로 출력한다. 지역 하나당 REPL 호출 1~2회, 120초 제한 안에 끝나도록 한다.
+
+**구획 결정 순서**
+
+1. `https://map.naver.com/p/search/<입력>` 탭을 열고 5초 기다린다.
+2. 페이지가 `https://map.naver.com/p/api/polygon?...order=adm&keyword=...`를 호출했으면(주소·동 검색) 그 URL을 그대로 다시 fetch한다. → `source_kind='adm'`.
+3. 아니면 `pcmap.place.naver.com/place/list` iframe의 인라인 `window.__APOLLO_STATE__`를 파싱해 `PlaceListBusinessesItem:*` 중 `poiInfo.polygon.shapeKey`가 있는 첫 항목을 고른다. `https://map.naver.com/p/api/polygon?lng=<x>&lat=<y>&order=develope&keyword=<shapeKey.id>`를 fetch한다. → `source_kind='develope'`. (예: "동성로" 입력 → "동성로로데오거리" 구획. 사용자가 스크린샷에서 본 파란 구획이 바로 이것이다.)
+4. 둘 다 없으면 실패. 메시지: "구획 정보를 찾지 못했습니다. '대구 중구 삼덕동'처럼 동 이름으로 검색해 보세요."
+
+응답은 GeoJSON FeatureCollection, geometry는 MultiPolygon, 좌표는 EPSG:4326 [lng, lat]. 첫 feature의 `bbox`를 쓴다.
+
+**식당 수집**
+
+1. `https://pcmap.place.naver.com/restaurant/list?query=음식점&bounds=<minx>%3B<miny>%3B<maxx>%3B<maxy>&x=<cx>&y=<cy>&clientX=<cx>&clientY=<cy>&display=100&locale=ko&svcName=map_pcv5`를 **탭으로 직접 연다**(최상위 페이지로 열어도 동작 확인됨).
+2. 인라인 스크립트의 `window.__APOLLO_STATE__`를 파싱한다. `ROOT_QUERY`의 `placeList(...)` 키 중 `"display":100`인 것의 `businesses.total`이 100을 넘으면 bbox를 4등분해 재귀한다(최대 깊이 5). 100 이하면 `PlaceListBusinessesItem:*` 항목을 모은다. `RestaurantAdSummary`(광고)는 버린다.
+3. `naver_id`로 중복을 제거하고, 각 좌표가 폴리곤 안에 있는지 ray-casting으로 검사해 밖이면 버린다.
+4. 항목 필드: `id, name, category, roadAddress, address, phone, x(lng), y(lat)`.
+
+`display`는 100이 상한이고 `start`/`page`는 무시되므로 반드시 bbox 분할로 페이징한다. 실험에서 삼덕동 bbox 하나에 984곳이 잡혔다.
+
+**수집 범위**: 네이버 "음식점" 검색이 돌려주는 모든 항목(카페·술집 포함)을 저장하고 업종을 그대로 표시한다. 조사 대상을 좁히는 것은 조사원이 업종을 보고 판단한다. (작성자의 "식당"을 넓게 해석한 설계자의 결정)
+
+### 4.5 화면
+
+**지도 화면 (/)** — 네이버 지도 PC 화면 구성을 따른다.
+
+- 왼쪽 패널(폭 380px): 상단에 초록 테두리 검색창(돋보기 아이콘, X 버튼). 그 아래 지역 이름·구획 이름·통계 한 줄("식당 123 · 조사 45 · 가능 30 · 불가능 15"). 필터 칩: 전체 / 미조사 / 가능 / 불가능. 그 아래 식당 목록. 각 항목은 이름(파란 링크색), 업종(회색), 도로명주소, 상태 배지.
+- 오른쪽 지도: Leaflet. 구획 폴리곤은 채움 `rgb(56,229,255)` 투명도 0.15, 테두리 `rgb(57,133,247)` 2px. 식당 핀은 네이버식 주황 원형 핀(포크·나이프 아이콘). 상태별 색: 미조사 주황, 가능 초록, 불가능 회색.
+- **가능 핀**은 바깥에 형광 연두(`#39ff14`) 링이 1초 주기로 커졌다 작아지며 깜빡인다(CSS keyframes, 투명도 1→0.2).
+- 핀 또는 목록 항목 클릭 → 팝오버(PC) / 하단 시트(모바일). 이름, 업종, 주소, 전화. 아래에 큰 버튼 두 개: **비플페이 가능**(초록) / **불가능**(회색). 이미 선택된 값은 강조되고, 다시 누르면 해제(미조사)된다. 버튼 높이 48px 이상.
+- 수집 중에는 패널에 "네이버 지도에서 수집 중… (30초~2분)"과 진행 점 애니메이션. 실패 시 빨간 문구와 재시도 버튼.
+- 모바일(폭 768px 이하): 지도가 전체 화면, 왼쪽 패널은 아래에서 끌어올리는 시트로 바뀐다. 검색창은 상단에 고정.
+- 최근 수집한 지역 목록을 검색창 아래 비어 있을 때 보여 준다(검색 전 초기 화면).
+
+**통계 화면 (/stats)** — 표 하나. 열: 지역, 식당 수, 조사 완료, 진행률(%), 가능, 불가능, 가맹률(%). 마지막 행 합계. 지역 이름을 누르면 그 지역 지도로 간다. CSV 다운로드 버튼 하나.
+
+- **정의 (설계자의 결정)**: 진행률 = 조사 완료 ÷ 식당 수. 가맹률 = 가능 ÷ 조사 완료 (조사 완료가 0이면 "–"). 합계 행은 `naver_id` 기준으로 중복을 제거한 값이라 지역 숫자의 단순 합과 다를 수 있고, 표 아래에 "합계는 여러 구획에 겹치는 식당을 한 번만 셉니다"라고 적는다. CSV도 같은 정의.
+- **지역 삭제 (설계자의 결정)**: 통계 표의 각 행 끝에 "삭제" 버튼. 누르면 지역 이름을 다시 입력받는 확인 대화상자를 거친다. 삭제는 `regions`, `region_aliases`, `region_places` 행만 지우고 `places`와 `surveys`는 남긴다. 그래서 같은 구획을 다시 수집하면 이미 입력한 가능/불가능 값이 그대로 살아난다. 오타·엉뚱한 구획을 치우는 용도이며, 로그인이 없으므로 조사원 모두가 지울 수 있다. 실수 방지는 이름 재입력으로 갈음한다.
+
+### 4.6 실행 방법 (README에 적을 내용)
+
+**최초 1회**
+
+1. Supabase 프로젝트의 SQL 편집기에서 `supabase/schema.sql`을 실행해 표를 만든다.
+2. 소스는 GitHub `maclovedany/bplepay`에 두고, Vercel 프로젝트를 이 저장소에 연결한다. main에 푸시하면 자동 배포된다. Vercel 환경변수에 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`를 넣는다. 배포 주소를 조사원에게 공유한다. (작성자의 결정)
+3. Mac의 `.env`에 같은 두 값을 적는다.
+
+**조사하는 날마다 (이 Mac에서)**
+
+1. Aside 앱 실행: `open -a Aside`
+2. 워커: `npm run worker`. 시작할 때 `aside repl --profile ... "console.log(1)"`로 Aside 연결을 확인하고 실패하면 종료한다.
+
+## 5. 구현자에게 맡기는 것
+
+- 파일 구조, 테스트 구성, 코드 스타일.
+- Leaflet 마커 아이콘의 구체적 모양(SVG 직접 그리기 또는 divIcon).
+- bbox 재귀 분할의 정확한 종료 조건과 REPL 호출 횟수 최적화(120초 제한 안에서).
+- 폴링 간격의 미세 조정.
+- CSV 인코딩(엑셀에서 한글이 깨지지 않게 BOM 포함 권장).
+- Apollo 상태 파싱 방식(실험에서는 `window.__APOLLO_STATE__` 뒤의 중괄호 균형 맞추기로 잘라 `JSON.parse`했다).
+
+## 6. 실험으로 확인한 사실 (2026-11-03)
+
+- Aside REPL로 `map.naver.com` 열기, 스냅샷, 프레임 접근, 페이지 안 `fetch`, Node 쪽 `fetch` 모두 동작.
+- "동성로" 검색 결과 iframe에서 70개 항목(이름·업종·주소·좌표·전화) 파싱 성공.
+- `api/polygon?order=develope&keyword=3696089` → 동성로로데오거리 MultiPolygon 수신.
+- "대구 중구 삼덕동" 검색 시 페이지가 `api/polygon?order=adm&keyword=06110545`를 호출, 직접 재호출 성공.
+- `restaurant/list?...bounds=...&display=100`을 최상위 탭으로 열어 100개 수신, total 984.
+- REPL은 스크립트 종료 시 열었던 탭을 닫는다. 결과는 반드시 한 호출 안에서 `console.log`로 받는다.
