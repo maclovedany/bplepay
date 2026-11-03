@@ -5,7 +5,8 @@
     panel: $('panel'), form: $('search-form'), input: $('search-input'), clear: $('search-clear'),
     recent: $('recent'), recentList: $('recent-regions'), recentEmpty: $('recent-empty'),
     status: $('status'), collecting: $('status-collecting'), failed: $('status-failed'), error: $('status-error'), retry: $('retry-btn'),
-    region: $('region'), name: $('region-name'), source: $('region-source'), stats: $('region-stats'),
+    region: $('region'), name: $('region-name'), source: $('region-source'), stats: $('region-stats'), ai: $('region-ai'),
+    suggestions: $('suggestions'), suggestionList: $('suggestion-list'),
     chips: $('filter-chips'), list: $('place-list'),
     sheet: $('sheet'), sheetClose: $('sheet-close'), sheetName: $('sheet-name'), sheetCat: $('sheet-category'),
     sheetAddr: $('sheet-address'), sheetPhone: $('sheet-phone'), btnYes: $('btn-yes'), btnNo: $('btn-no'),
@@ -84,13 +85,22 @@
     } catch (e) { showStatus('failed', e.message); }
   });
 
-  function showStatus(kind, message) {
+  function showStatus(kind, message, suggestions = []) {
     el.recent.hidden = true;
     el.region.hidden = true;
     el.status.hidden = false;
     el.collecting.hidden = kind !== 'collecting';
     el.failed.hidden = kind !== 'failed';
     if (kind === 'failed') el.error.textContent = message || '수집에 실패했습니다.';
+    el.suggestions.hidden = !(kind === 'failed' && suggestions.length);
+    el.suggestionList.innerHTML = '';
+    for (const q of suggestions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = q;
+      b.addEventListener('click', () => { el.input.value = q; el.clear.hidden = false; el.form.requestSubmit(); });
+      el.suggestionList.appendChild(b);
+    }
     closeSheet();
   }
 
@@ -113,7 +123,7 @@
         state.refreshTimer = setInterval(refreshSurveys, 10000);
       } else if (region.status === 'failed') {
         state.query = state.query || region.name;
-        showStatus('failed', region.error);
+        showStatus('failed', region.error, region.suggestions || []);
       } else {
         showStatus('collecting');
         state.pollTimer = setTimeout(pollRegion, 2000);
@@ -147,6 +157,11 @@
     el.region.hidden = false;
     el.name.textContent = region.name;
     el.source.textContent = region.source_name && region.source_name !== region.name ? `구획: ${region.source_name}` : '';
+    const aiText = region.search_query && region.search_query !== region.name
+      ? `AI 해석: ${region.name} → ${region.search_query}${region.ai_note ? ' · ' + region.ai_note : ''}`
+      : (region.ai_note ? `AI: ${region.ai_note}` : '');
+    el.ai.hidden = !aiText;
+    el.ai.textContent = aiText;
     renderHead();
 
     if (polygonLayer) map.removeLayer(polygonLayer);

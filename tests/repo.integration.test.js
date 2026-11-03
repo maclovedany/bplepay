@@ -49,8 +49,11 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
   assert.equal((await repo.getRegion(r2.id)).merged_into, r.id);
   assert.equal((await repo.findAlias(q + 'b')).region_id, r.id);
 
-  await repo.failRegion(r2.id, 'oops');
+  await repo.setRegionAi(r2.id, { search_query: '대구 중구 교동', ai_note: '시·구를 붙임' });
+  assert.equal((await repo.getRegion(r2.id)).search_query, '대구 중구 교동');
+  await repo.failRegion(r2.id, 'oops', { suggestions: ['a', 'b'] });
   assert.equal((await repo.getRegion(r2.id)).error, 'oops');
+  assert.deepEqual((await repo.getRegion(r2.id)).suggestions, ['a', 'b']);
   const beforeReset = (await repo.getRegion(r2.id)).created_at;
   await new Promise((res) => setTimeout(res, 1100));
   await repo.resetToCollecting(r2.id);
@@ -58,6 +61,7 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
   assert.equal(afterReset.status, 'collecting');
   assert.equal(afterReset.error, null);
   assert.equal(afterReset.started_at, null);
+  assert.equal(afterReset.suggestions, null, 'reset clears suggestions');
   assert.ok(Date.parse(afterReset.created_at) > Date.parse(beforeReset), 'resetToCollecting refreshes created_at');
   await repo.markStarted(r2.id);
   assert.ok((await repo.getRegion(r2.id)).started_at, 'markStarted sets started_at');

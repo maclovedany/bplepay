@@ -104,6 +104,10 @@ button { font: inherit; cursor: pointer; }
 .region-head { padding: 14px 16px 8px; border-bottom: 1px solid var(--line); }
 .region-name { margin: 0; font-size: 20px; }
 .region-stats { margin: 6px 0 0; font-size: 13px; color: #444; }
+.region-ai { margin: 6px 0 0; font-size: 12px; color: #5b5bd6; background: #f3f3ff; border-radius: 6px; padding: 6px 8px; line-height: 1.4; }
+.suggestions { margin: 0 0 12px; }
+.suggestion-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.suggestion-list button { border: 1px solid #c9c9f5; background: #f7f7ff; color: #3b3bb3; border-radius: 999px; padding: 8px 12px; min-height: 40px; font-size: 13px; }
 .region-stats b { color: var(--text); }
 .chips { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #fff; z-index: 1; }
 .chip {

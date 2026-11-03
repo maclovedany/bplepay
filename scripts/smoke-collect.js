@@ -3,12 +3,19 @@
 import { runRepl } from '../worker/aside.js';
 import { regionScript, placesScript } from '../worker/scripts.js';
 import { bboxOfFeature, pointInGeometry } from '../lib/geo.js';
+import { pickPolygon } from '../worker/collect.js';
+import { createAgent } from '../worker/agent.js';
 
 const query = process.argv.slice(2).join(' ');
 if (!query) { console.error('usage: node scripts/smoke-collect.js <query>'); process.exit(1); }
 const t0 = Date.now();
-const r = await runRepl(regionScript(query));
-if (r.error) { console.log('region:', r.error, `(${Date.now() - t0}ms)`); process.exit(0); }
+const agent = createAgent({ log: (m) => console.log('  agent:', m) });
+const ai = await agent.interpretQuery(query);
+console.log(`agent: "${query}" → "${ai.query}"${ai.note ? ' (' + ai.note + ')' : ''} (${Date.now() - t0}ms)`);
+const raw = await runRepl(regionScript(ai.query));
+if (raw.candidates) console.log('candidates:', raw.candidates.map((c) => `${c.name} [${c.category}] ${c.address} poly=${raw.features[c.id] ? 'Y' : 'N'}`).join(' | '));
+const r = await pickPolygon(raw, query, agent, (m) => console.log('  agent:', m));
+if (!r) { console.log('region: no_polygon', `(${Date.now() - t0}ms)`); process.exit(0); }
 const bbox = bboxOfFeature(r.feature);
 console.log(`kind=${r.kind} key=${r.key} name=${r.name} bbox=${bbox.map((n) => n.toFixed(5)).join(',')} (${Date.now() - t0}ms)`);
 const t1 = Date.now();

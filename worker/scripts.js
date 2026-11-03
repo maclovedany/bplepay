@@ -21,18 +21,25 @@ if (admUrl) {
 } else {
   const frame = page.frames().find(f => /pcmap\\.place\\.naver\\.com\\/place\\/list/.test(f.url()));
   if (frame) {
-    const cand = await frame.evaluate(${PARSER_SRC} + '; (' + (() => {
+    const cands = await frame.evaluate(${PARSER_SRC} + '; (' + (() => {
       const text = Array.from(document.scripts).map(s => s.textContent).find(t => t.includes('__APOLLO_STATE__')) || '';
       const st = parseApolloState(text) || {};
       const items = Object.keys(st).filter(k => k.startsWith('PlaceListBusinessesItem:')).map(k => st[k]);
-      const it = items.find(i => i.poiInfo && i.poiInfo.polygon && i.poiInfo.polygon.shapeKey && i.poiInfo.polygon.shapeKey.__ref);
-      return it ? { id: it.poiInfo.polygon.shapeKey.__ref.split(':')[1], x: it.x, y: it.y, name: it.name } : null;
+      return items
+        .filter(i => i.poiInfo && i.poiInfo.polygon && i.poiInfo.polygon.shapeKey && i.poiInfo.polygon.shapeKey.__ref)
+        .slice(0, 5)
+        .map(i => ({ id: i.poiInfo.polygon.shapeKey.__ref.split(':')[1], x: i.x, y: i.y, name: i.name, category: i.category || '', address: i.commonAddress || i.address || '' }));
     }).toString() + ')()');
-    if (cand) {
-      const purl = 'https://map.naver.com/p/api/polygon?lng=' + cand.x + '&lat=' + cand.y + '&order=develope&keyword=' + cand.id;
-      const fc = await page.evaluate(async (u) => (await fetch(u, { headers: { accept: 'application/json' } })).json(), purl);
-      const f = fc && fc.features && fc.features[0];
-      if (f) result = { kind: 'develope', key: String(cand.id), name: cand.name, feature: f };
+    if (cands && cands.length) {
+      const features = {};
+      for (const c of cands) {
+        const purl = 'https://map.naver.com/p/api/polygon?lng=' + c.x + '&lat=' + c.y + '&order=develope&keyword=' + c.id;
+        try {
+          const fc = await page.evaluate(async (u) => (await fetch(u, { headers: { accept: 'application/json' } })).json(), purl);
+          features[c.id] = (fc && fc.features && fc.features[0]) || null;
+        } catch (e) { features[c.id] = null; }
+      }
+      result = { kind: 'develope', candidates: cands, features };
     }
   }
 }

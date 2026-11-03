@@ -180,3 +180,12 @@ test('GET with non-numeric id → 400', async () => {
   await createHandlers(fakeRepo()).regionGet({ method: 'GET', query: { id: 'abc' } }, res);
   assert.equal(res.statusCode, 400);
 });
+
+test('GET region exposes search_query, ai_note and suggestions', async () => {
+  const repo = fakeRepo({ regions: { 1: { id: 1, name: '교동', status: 'failed', error: 'x', search_query: '대구 중구 교동', ai_note: '시·구를 붙임', suggestions: ['대구 중구 교동'] } } });
+  const res = fakeRes();
+  await createHandlers(repo).regionGet({ method: 'GET', query: { id: '1' } }, res);
+  assert.equal(res.body.region.search_query, '대구 중구 교동');
+  assert.equal(res.body.region.ai_note, '시·구를 붙임');
+  assert.deepEqual(res.body.region.suggestions, ['대구 중구 교동']);
+});

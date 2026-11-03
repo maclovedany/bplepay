@@ -6,6 +6,7 @@ import { MESSAGES } from '../lib/messages.js';
 
 const square = { type: 'Feature', bbox: [0, 0, 10, 10], geometry: { type: 'Polygon', coordinates: [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]] } };
 const region = { id: 42, query: '동성로' };
+const noAgent = { async interpretQuery(q) { return { query: q, note: null }; }, async chooseCandidate() { return { index: 0, reason: null }; }, async suggestNarrower() { return []; } };
 
 function fakeRepo({ existing = null } = {}) {
   const calls = [];
@@ -13,7 +14,7 @@ function fakeRepo({ existing = null } = {}) {
   return {
     calls,
     failRegion: rec('failRegion'), mergeRegion: rec('mergeRegion'), setRegionPolygon: rec('setRegionPolygon'),
-    upsertPlaces: rec('upsertPlaces'), linkPlaces: rec('linkPlaces'), markReady: rec('markReady'), upsertAlias: rec('upsertAlias'),
+    upsertPlaces: rec('upsertPlaces'), linkPlaces: rec('linkPlaces'), markReady: rec('markReady'), upsertAlias: rec('upsertAlias'), setRegionAi: rec('setRegionAi'),
     async findRegionBySourceKey(key) { calls.push(['findRegionBySourceKey', key]); return existing; },
   };
 }
@@ -28,14 +29,14 @@ function fakeRunRepl({ region: r, places: p }) {
 
 test('no_polygon → failRegion with NO_POLYGON', async () => {
   const repo = fakeRepo();
-  await collectRegion(repo, region, { runRepl: fakeRunRepl({ region: { error: 'no_polygon' } }) });
+  await collectRegion(repo, region, { runRepl: fakeRunRepl({ region: { error: 'no_polygon' } }), agent: noAgent });
   assert.deepEqual(repo.calls, [['failRegion', 42, MESSAGES.NO_POLYGON]]);
 });
 
 test('existing source_key → mergeRegion, no places call', async () => {
   const repo = fakeRepo({ existing: { id: 7, status: 'ready' } });
   const runRepl = fakeRunRepl({ region: { kind: 'develope', key: '3696089', name: '동성로로데오거리', feature: square } });
-  await collectRegion(repo, region, { runRepl });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
   assert.deepEqual(repo.calls, [['findRegionBySourceKey', 'develope:3696089'], ['mergeRegion', 42, 7, '동성로']]);
   assert.equal(runRepl.scripts.length, 1);
 });
@@ -43,8 +44,8 @@ test('existing source_key → mergeRegion, no places call', async () => {
 test('too_wide → failRegion with TOO_WIDE', async () => {
   const repo = fakeRepo();
   const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square }, places: { error: 'too_wide' } });
-  await collectRegion(repo, region, { runRepl });
-  assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.TOO_WIDE]);
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
+  assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.TOO_WIDE, { suggestions: [] }]);
   assert.equal(repo.calls.some((c) => c[0] === 'markReady'), false);
 });
 
@@ -56,7 +57,7 @@ test('happy path filters outside points, dedupes, marks ready, aliases', async (
     { naver_id: 'b', name: 'B', category: '카페', road_address: 'r', address: 'x', phone: null, lng: 50, lat: 50 },
   ];
   const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square }, places: { items, leaves: 1 } });
-  await collectRegion(repo, region, { runRepl });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
   const names = repo.calls.map((c) => c[0]);
   assert.deepEqual(names, ['findRegionBySourceKey', 'setRegionPolygon', 'upsertPlaces', 'linkPlaces', 'markReady', 'upsertAlias']);
   assert.deepEqual(repo.calls[1][2], { source_kind: 'adm', source_key: 'adm:06110545', source_name: '삼덕동', polygon: square.geometry, bbox: [0, 0, 10, 10], name: '동성로' });
@@ -67,7 +68,7 @@ test('happy path filters outside points, dedupes, marks ready, aliases', async (
 
 test('thrown error → failRegion with 수집 중 오류', async () => {
   const repo = fakeRepo();
-  await collectRegion(repo, region, { runRepl: async () => { throw new Error('aside repl failed: boom'); } });
+  await collectRegion(repo, region, { runRepl: async () => { throw new Error('aside repl failed: boom'); }, agent: noAgent });
   assert.equal(repo.calls.length, 1);
   assert.equal(repo.calls[0][0], 'failRegion');
   assert.match(repo.calls[0][2], /^수집 중 오류: aside repl failed: boom/);
@@ -95,7 +96,7 @@ test('placesScript embeds bbox and limits', () => {
 test('existing failed region with same source_key → fail with its error, no polygon write', async () => {
   const repo = fakeRepo({ existing: { id: 7, status: 'failed', error: MESSAGES.TOO_WIDE } });
   const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '04150109', name: '교동', feature: square } });
-  await collectRegion(repo, region, { runRepl });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
   assert.deepEqual(repo.calls, [['findRegionBySourceKey', 'adm:04150109'], ['failRegion', 42, MESSAGES.TOO_WIDE]]);
   assert.equal(runRepl.scripts.length, 1);
 });
@@ -103,6 +104,46 @@ test('existing failed region with same source_key → fail with its error, no po
 test('existing collecting region with same source_key → merge', async () => {
   const repo = fakeRepo({ existing: { id: 7, status: 'collecting' } });
   const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square } });
-  await collectRegion(repo, region, { runRepl });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
   assert.deepEqual(repo.calls[1], ['mergeRegion', 42, 7, '동성로']);
+});
+
+// ---- AI 판단 층 ----
+function fakeAgent({ query = null, note = null, index = 0, reason = null, suggestions = [] } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async interpretQuery(raw) { calls.push(['interpretQuery', raw]); return { query: query ?? raw, note }; },
+    async chooseCandidate(raw, cands) { calls.push(['chooseCandidate', raw, cands.length]); return { index, reason }; },
+    async suggestNarrower(raw, name) { calls.push(['suggestNarrower', raw, name]); return suggestions; },
+  };
+}
+
+test('agent-rewritten query is what gets searched and is stored with the note', async () => {
+  const repo = fakeRepo();
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110125', name: '교동', feature: square }, places: { items: [], leaves: 1 } });
+  const agent = fakeAgent({ query: '대구 중구 교동', note: '시·구를 붙임' });
+  await collectRegion(repo, { id: 42, query: '교동' }, { runRepl, agent });
+  assert.ok(runRepl.scripts[0].includes(encodeURIComponent('대구 중구 교동')), 'search uses the rewritten query');
+  assert.deepEqual(repo.calls[0], ['setRegionAi', 42, { search_query: '대구 중구 교동', ai_note: '시·구를 붙임' }]);
+});
+
+test('several polygon candidates → agent picks, chosen one is fetched', async () => {
+  const repo = fakeRepo();
+  const cands = [{ id: '1', x: 1, y: 1, name: '동성로', category: '거리,골목', address: 'a' }, { id: '3696089', x: 2, y: 2, name: '동성로로데오거리', category: '거리,골목', address: 'b' }];
+  const runRepl = fakeRunRepl({ region: { kind: 'develope', candidates: cands, features: { 1: null, 3696089: square } }, places: { items: [], leaves: 1 } });
+  const agent = fakeAgent({ index: 1, reason: '먹자골목' });
+  await collectRegion(repo, region, { runRepl, agent });
+  assert.deepEqual(agent.calls[1], ['chooseCandidate', '동성로', 2]);
+  const poly = repo.calls.find((c) => c[0] === 'setRegionPolygon');
+  assert.equal(poly[2].source_key, 'develope:3696089');
+  assert.equal(poly[2].source_name, '동성로로데오거리');
+});
+
+test('too_wide stores agent suggestions with the failure', async () => {
+  const repo = fakeRepo();
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square }, places: { error: 'too_wide' } });
+  const agent = fakeAgent({ suggestions: ['대구 중구 삼덕동1가', '대구 중구 삼덕동2가'] });
+  await collectRegion(repo, region, { runRepl, agent });
+  assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.TOO_WIDE, { suggestions: ['대구 중구 삼덕동1가', '대구 중구 삼덕동2가'] }]);
 });

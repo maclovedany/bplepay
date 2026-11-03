@@ -20,7 +20,12 @@
 SUPABASE_URL=https://xxxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ASIDE_PROFILE=<aside host profiles 에서 connected 인 프로필 ID>
+GEMINI_API_KEY=AIza...            # AI 판단 층 (Google AI Studio 에서 발급)
+# GEMINI_MODEL=gemini-3.5-flash-lite   # 선택. 기본값
+# SURVEY_CONTEXT=대구광역시에서 진행하는 비플페이(대구로페이) 가맹점 현장조사   # 선택
 ```
+
+`supabase/migrations/*.sql` 도 순서대로 SQL Editor 에서 실행한다(열 추가).
 
 4. **Aside**: https://aside.com 의 Aside 브라우저와 CLI(`curl -fsSL https://releases.aside.com/install.sh | bash`)를 설치한다. Aside 계정 로그인은 필요 없다.
 
@@ -49,6 +54,16 @@ node scripts/smoke-collect.js "대구 중구 삼덕동"   # DB 없이 네이버 
 | 구획 정보를 찾지 못했습니다. '대구 중구 삼덕동'처럼 동 이름으로 검색해 보세요. | 네이버 검색 결과에 폴리곤이 붙은 항목이 없다 | 시·구를 붙인 동 이름이나 거리 이름으로 다시 검색 |
 | 범위가 너무 넓습니다. 동이나 거리 이름으로 검색해 주세요. | 구획 안 식당이 너무 많아(약 2,000곳 초과) 120초 안에 못 긁었다 | 더 좁은 지역 이름으로 |
 | 수집 워커가 꺼져 있습니다. 관리자에게 알려 주세요. | 3분이 지나도 워커가 처리하지 않았다 | Mac에서 `npm run worker` 실행 후 "다시 시도" |
+
+## AI 판단 층
+
+워커가 Gemini(`gemini-3.5-flash-lite`)에게 세 가지를 맡긴다. 모델이 실패하면 기본 동작으로 돌아간다.
+
+- 검색어 해석: "교동" → "대구 중구 교동" (화면에 "AI 해석"으로 표시)
+- 구획 후보 선택: 폴리곤이 붙은 후보가 여럿일 때 하나 고르기
+- 범위 초과 시 더 좁은 지역 제안: 실패 화면에 버튼으로 표시
+
+구조 설명은 `architecture.md`(비개발자용)를 보라.
 
 ## 네이버 지도 접근 경로 (비공식, 바뀔 수 있음)
 

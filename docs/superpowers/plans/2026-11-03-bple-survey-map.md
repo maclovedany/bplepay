@@ -450,3 +450,24 @@ git push                                # 자동 배포 트리거
 
 - [ ] **Step 3: 배포 확인** `curl -s https://<배포주소>/api/stats` → JSON; 휴대폰 크기 뷰포트로 `https://<배포주소>/#r=N` 스크린샷(Aside) → 지도·핀 표시. 워커가 켜진 상태에서 배포 주소로 새 지역("대구 중구 삼덕동") 검색 → ready. 마지막으로 README를 고쳐 푸시한 뒤 자동 배포가 도는지(`vercel ls bplepay`에 새 항목) 확인한다.
 - [ ] **Step 4: Commit** `git add README.md vercel.json && git commit -m "docs: readme and deploy"`
+
+---
+
+### Task 12: AI 판단 층 (Gemini) — 2026-11-03 추가 (스펙 7절)
+
+**Files:**
+- Create: `lib/gemini.js`, `worker/agent.js`, `supabase/migrations/2026-11-03-ai-agent.sql`, `tests/gemini.test.js`, `tests/agent.test.js`
+- Modify: `worker/scripts.js`(후보 목록+폴리곤 일괄 수신), `worker/collect.js`(interpretQuery → chooseCandidate → suggestNarrower), `lib/repo.js`(`setRegionAi`, `failRegion(id, error, {suggestions})`), `api/_handlers.js`(`search_query, ai_note, suggestions` 노출), `public/`(AI 해석 표시, 제안 버튼), `scripts/smoke-collect.js`, `tests/collect.test.js`, `tests/handlers.test.js`, `tests/repo.integration.test.js`
+
+**Interfaces:**
+- `askJson({system, user, schema, temperature}, {apiKey, model, fetchImpl, timeoutMs}) → Promise<object>` — Gemini `generateContent`, `responseMimeType: application/json`, 실패 시 throw.
+- `createAgent({askJson, context, log}) → { interpretQuery(raw) → {query, note|null}, chooseCandidate(raw, candidates) → {index, reason|null}, suggestNarrower(raw, regionName) → string[] }` — 모든 메서드는 실패 시 기본값(raw / 0 / []).
+- `regionScript` 결과: adm 는 그대로 `{kind:'adm', key, name, feature}`; develope 는 `{kind:'develope', candidates:[{id,x,y,name,category,address}], features:{[id]: feature|null}}`.
+- `pickPolygon(r, rawQuery, agent, log) → {kind,key,name,feature}|null` (collect.js export).
+
+- [ ] Step 1: `tests/gemini.test.js`, `tests/agent.test.js` 실패 확인 → `lib/gemini.js`, `worker/agent.js` 구현 → PASS (9)
+- [ ] Step 2: `tests/collect.test.js`에 해석·후보 선택·제안 저장 3건, `tests/handlers.test.js`에 필드 노출 1건, 통합 테스트에 `setRegionAi`/`suggestions` 추가 → RED → 구현 → PASS
+- [ ] Step 3: 사용자가 `supabase/migrations/2026-11-03-ai-agent.sql` 실행 → `npm test` 전체 PASS
+- [ ] Step 4: `node scripts/smoke-collect.js 동성로` → `agent: "동성로" → "대구 중구 동성로"`, 후보 목록, 588곳. 워커 재시작 후 배포 주소에서 "교동" 검색 → 화면에 "AI 해석" 표시; 넓은 지역 검색 → 실패 화면에 제안 버튼.
+- [ ] Step 5: Commit, push, 문서 갱신(spec 7절, README, architecture.md, 단계별프롬프트.md 16단계)
+

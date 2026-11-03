@@ -14,7 +14,10 @@ create table if not exists regions (
   merged_into bigint references regions(id) on delete set null,
   error text,
   created_at timestamptz not null default now(),   -- 마지막으로 수집을 요청한 때 (재시도 시 갱신)
-  started_at timestamptz                           -- 워커가 집어 간 때
+  started_at timestamptz,                          -- 워커가 집어 간 때
+  search_query text,                               -- AI 가 고친 네이버 검색어
+  ai_note text,                                    -- 해석 이유 한 줄
+  suggestions jsonb                                -- 실패 시 AI 가 제안한 검색어 목록
 );
 
 create table if not exists region_aliases (
