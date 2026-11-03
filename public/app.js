@@ -113,7 +113,8 @@
     for (const r of regions.slice(0, 15)) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'chip' + (r.id === state.regionId ? ' is-active' : '') + (r.status === 'failed' ? ' is-failed' : '') + (r.status === 'collecting' ? ' is-collecting' : '');
+      const active = r.id === state.regionId || (state.region && r.id === state.region.id); // 병합된 검색은 대상 지역 칩을 켠다
+      b.className = 'chip' + (active ? ' is-active' : '') + (r.status === 'failed' ? ' is-failed' : '') + (r.status === 'collecting' ? ' is-collecting' : '');
       b.textContent = r.name;
       b.title = r.name;
       b.addEventListener('click', () => { el.input.value = r.name; el.clear.hidden = false; openRegion(r.id, r.name); });
