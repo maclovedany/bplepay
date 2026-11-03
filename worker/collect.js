@@ -25,6 +25,26 @@ async function categoryFilter(agent, want, getCategories) {
   return { want, categories };
 }
 
+const MAX_PLACE_CALLS = 4;
+
+// 식당 목록을 모은다. 한 번의 REPL 호출이 시간 예산 안에 다 못 보면 남은 상자(pending)로 이어서 호출한다.
+// MAX_PLACE_CALLS 번 뒤에도 남으면 너무 넓은 것으로 보고 null 을 돌려준다.
+export async function collectPlaces(runRepl, bbox, log = () => {}) {
+  const items = [];
+  let leaves = 0;
+  let pending = [bbox];
+  for (let call = 1; call <= MAX_PLACE_CALLS && pending.length; call++) {
+    const p = await runRepl(placesScript(pending));
+    if (!p || p.error) return null;
+    items.push(...(p.items ?? []));
+    leaves += p.leaves ?? 0;
+    pending = p.pending ?? [];
+    if (pending.length) log(`places call ${call}: ${leaves} leaves so far, ${pending.length} boxes pending`);
+  }
+  if (pending.length) return null;
+  return { items, leaves };
+}
+
 export async function collectRegion(repo, region, { runRepl, log = () => {}, agent = createAgent({ log }) }) {
   try {
     const ai = await agent.interpretQuery(region.query);
@@ -55,8 +75,8 @@ export async function collectRegion(repo, region, { runRepl, log = () => {}, age
     await repo.setRegionPolygon(region.id, { source_kind: r.kind, source_key, source_name: r.name, polygon: r.feature.geometry, bbox, name: region.query });
     log(`polygon ${r.kind}:${r.key} ${r.name}, bbox ${bbox.map((n) => n.toFixed(4)).join(',')}`);
 
-    const p = await runRepl(placesScript(bbox));
-    if (!p || p.error === 'too_wide') {
+    const p = await collectPlaces(runRepl, bbox, log);
+    if (!p) {
       const suggestions = await agent.suggestNarrower(region.query, r.name);
       await repo.failRegion(region.id, MESSAGES.TOO_WIDE, { suggestions });
       if (suggestions.length) log(`agent suggests: ${suggestions.join(' / ')}`);

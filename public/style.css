@@ -76,6 +76,14 @@ button { font: inherit; cursor: pointer; }
 .search-clear { border: 0; background: transparent; font-size: 22px; color: var(--gray); line-height: 1; padding: 0 4px; }
 .stats-link { color: var(--gray); font-size: 13px; white-space: nowrap; }
 
+.recent-chips {
+  display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; border-bottom: 1px solid var(--line);
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.recent-chips::-webkit-scrollbar { display: none; }
+.recent-chips .chip { flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-chips .chip.is-failed { color: #c0392b; border-color: #f3c5c5; }
+.recent-chips .chip.is-collecting { color: #1a73e8; border-color: #bcd8f7; }
 .panel-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .section-title { font-size: 13px; color: var(--gray); font-weight: 600; margin: 14px 16px 6px; }
 
@@ -212,6 +220,7 @@ button { font: inherit; cursor: pointer; }
   .sheet-handle { display: block; order: -1; padding: 8px 0 4px; }
   .sheet-handle span { display: block; width: 40px; height: 4px; border-radius: 2px; background: #ccc; margin: 0 auto; }
   .panel-body { padding-top: 0; }
+  .recent-chips { order: -1; padding-top: 4px; }
   .sheet { left: 8px; right: 8px; width: auto; bottom: 8px; max-width: none; z-index: 800; }
   .btn-survey { min-height: 52px; }
   .leaflet-top.leaflet-left { top: 64px; }

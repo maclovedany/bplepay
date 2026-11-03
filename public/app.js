@@ -3,7 +3,7 @@
   const $ = (id) => document.getElementById(id);
   const el = {
     panel: $('panel'), form: $('search-form'), input: $('search-input'), clear: $('search-clear'),
-    recent: $('recent'), recentList: $('recent-regions'), recentEmpty: $('recent-empty'),
+    recent: $('recent'), recentList: $('recent-regions'), recentEmpty: $('recent-empty'), recentChips: $('recent-chips'),
     status: $('status'), collecting: $('status-collecting'), failed: $('status-failed'), error: $('status-error'), retry: $('retry-btn'),
     region: $('region'), name: $('region-name'), source: $('region-source'), stats: $('region-stats'), ai: $('region-ai'),
     suggestions: $('suggestions'), suggestionList: $('suggestion-list'),
@@ -41,6 +41,7 @@
   async function loadRecent() {
     try {
       const { regions } = await api('/api/regions');
+      renderRecentChips(regions);
       el.recentList.innerHTML = '';
       el.recentEmpty.hidden = regions.length > 0;
       for (const r of regions) {
@@ -105,6 +106,21 @@
     closeSheet();
   }
 
+  // 검색창 아래 한 줄: 최근 검색한 이름들. 지역을 보는 중에도 늘 보인다.
+  function renderRecentChips(regions) {
+    el.recentChips.innerHTML = '';
+    el.recentChips.hidden = regions.length === 0;
+    for (const r of regions.slice(0, 15)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (r.id === state.regionId ? ' is-active' : '') + (r.status === 'failed' ? ' is-failed' : '') + (r.status === 'collecting' ? ' is-collecting' : '');
+      b.textContent = r.name;
+      b.title = r.name;
+      b.addEventListener('click', () => { el.input.value = r.name; el.clear.hidden = false; openRegion(r.id, r.name); });
+      el.recentChips.appendChild(b);
+    }
+  }
+
   // ---------- 지역 열기 / 폴링 ----------
   function openRegion(id, query = state.query) {
     state.regionId = id;
@@ -114,6 +130,7 @@
     clearInterval(state.refreshTimer);
     showStatus('collecting');
     pollRegion();
+    loadRecent();
   }
 
   const regionUrl = () => '/api/regions/' + state.regionId + (state.query ? '?q=' + encodeURIComponent(state.query) : '');

@@ -151,11 +151,19 @@ test('GET collecting that the worker has started stays collecting even past 3 mi
   assert.equal(repo.calls.length, 0);
 });
 
-test('GET collecting started more than 5 minutes ago → failed with timeout error', async () => {
+test('GET collecting started 7 minutes ago (4 calls × 2 min allowed) stays collecting', async () => {
   const created = Date.parse('2026-11-03T00:00:00Z');
   const repo = fakeRepo({ regions: { 5: { id: 5, query: 'x', name: 'x', status: 'collecting', created_at: new Date(created).toISOString(), started_at: new Date(created + 60000).toISOString() } } });
   const res = fakeRes();
   await createHandlers(repo, { now: () => created + 7 * 60000 }).regionGet({ method: 'GET', query: { id: '5' } }, res);
+  assert.equal(res.body.region.status, 'collecting');
+});
+
+test('GET collecting started more than 10 minutes ago → failed with timeout error', async () => {
+  const created = Date.parse('2026-11-03T00:00:00Z');
+  const repo = fakeRepo({ regions: { 5: { id: 5, query: 'x', name: 'x', status: 'collecting', created_at: new Date(created).toISOString(), started_at: new Date(created + 60000).toISOString() } } });
+  const res = fakeRes();
+  await createHandlers(repo, { now: () => created + 12 * 60000 }).regionGet({ method: 'GET', query: { id: '5' } }, res);
   assert.equal(res.body.region.status, 'failed');
   assert.match(res.body.region.error, /^수집 중 오류: 시간 초과/);
 });

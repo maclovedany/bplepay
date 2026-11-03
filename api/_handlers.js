@@ -3,7 +3,7 @@ import { computeStats, statsToCsv } from '../lib/stats.js';
 import { MESSAGES } from '../lib/messages.js';
 
 const WAIT_MS = 3 * 60 * 1000;     // 워커가 집어 가지 않은 채 3분 → 워커가 꺼진 것으로 본다
-const RUN_MS = 5 * 60 * 1000;      // 집어 간 뒤 5분 → 수집 중 죽은 것으로 본다
+const RUN_MS = 10 * 60 * 1000;     // 집어 간 뒤 10분(식당 호출 최대 4번 × 2분 + 여유) → 수집 중 죽은 것으로 본다
 const SURVEY_VALUES = new Set(['yes', 'no', null]);
 
 const publicRegion = (r) => ({

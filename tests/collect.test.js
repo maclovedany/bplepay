@@ -22,7 +22,7 @@ function fakeRepo({ existing = null } = {}) {
 // 스크립트 문자열에 api/polygon 이 들어 있으면 구획 호출, 아니면 식당 호출로 본다.
 function fakeRunRepl({ region: r, places: p }) {
   const scripts = [];
-  const fn = async (script) => { scripts.push(script); return /api\/polygon/.test(script) ? r : p; };
+  const fn = async (script) => { scripts.push(script); return /api\/polygon/.test(script) ? r : (Array.isArray(p) ? p.shift() : p); };
   fn.scripts = scripts;
   return fn;
 }
@@ -47,6 +47,30 @@ test('too_wide → failRegion with TOO_WIDE', async () => {
   await collectRegion(repo, region, { runRepl, agent: noAgent });
   assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.TOO_WIDE, { suggestions: [] }]);
   assert.equal(repo.calls.some((c) => c[0] === 'markReady'), false);
+});
+
+test('places call that returns pending bboxes is continued in a second call', async () => {
+  const repo = fakeRepo();
+  const a = { naver_id: 'a', name: 'A', category: '한식', road_address: 'r', address: 'x', phone: null, lng: 5, lat: 5 };
+  const b = { naver_id: 'b', name: 'B', category: '카페', road_address: 'r', address: 'x', phone: null, lng: 6, lat: 6 };
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square }, places: [
+    { items: [a], leaves: 3, pending: [[0, 0, 5, 5], [5, 5, 10, 10]] },
+    { items: [b], leaves: 2, pending: [] },
+  ] });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
+  assert.equal(runRepl.scripts.length, 3);
+  assert.ok(runRepl.scripts[2].includes('[[0,0,5,5],[5,5,10,10]]'));
+  assert.deepEqual(repo.calls.find((c) => c[0] === 'upsertPlaces')[1].map((i) => i.naver_id), ['a', 'b']);
+  assert.ok(repo.calls.some((c) => c[0] === 'markReady'));
+});
+
+test('pending bboxes still left after 4 calls → TOO_WIDE', async () => {
+  const repo = fakeRepo();
+  const more = { items: [], leaves: 1, pending: [[0, 0, 5, 5]] };
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square }, places: [more, more, more, more, more] });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
+  assert.equal(runRepl.scripts.length, 5);
+  assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.TOO_WIDE, { suggestions: [] }]);
 });
 
 test('happy path filters outside points, dedupes, marks ready, aliases', async () => {
@@ -86,10 +110,22 @@ test('regionScript contains query and adm/develope urls', () => {
 test('placesScript embeds bbox and limits', () => {
   const s = placesScript([1, 2, 3, 4]);
   assert.ok(s.includes('[1,2,3,4]'));
-  assert.ok(s.includes('24'));
+  assert.ok(s.includes('100000'));
   assert.ok(s.includes('restaurant/list'));
   assert.ok(s.includes('display=100'));
   assert.ok(s.includes('function parseApolloState'));
+  // 잎 하나마다 페이지를 여는 대신 같은 출처에서 fetch 로 HTML 만 받아 파싱한다.
+  assert.ok(s.includes('fetch('));
+  assert.ok(s.includes('DOMParser'));
+  // 예산이 끝나면 남은 상자를 pending 으로 돌려주고, 여러 상자에서 이어서 시작할 수 있다.
+  assert.ok(s.includes('pending'));
+  assert.ok(placesScript([[1, 2, 3, 4], [5, 6, 7, 8]]).includes('[[1,2,3,4],[5,6,7,8]]'));
+});
+
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+test('generated REPL scripts parse as async JavaScript', () => {
+  assert.doesNotThrow(() => new AsyncFunction(regionScript('삼덕동')));
+  assert.doesNotThrow(() => new AsyncFunction(placesScript([1, 2, 3, 4])));
 });
 
 // ---- 리뷰 반영: 같은 구획이 failed/collecting 으로 남아 있을 때 ----
