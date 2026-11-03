@@ -46,6 +46,16 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
   await repo.setSurvey(pid, null);
   assert.equal((await repo.getRegionPlaces(r.id))[0].survey, null);
 
+  // 좋아요/싫어요: 기기마다 하나, 같은 기기가 다시 누르면 바뀌거나 지워진다
+  assert.deepEqual(await repo.setReaction(pid, 'dev-a', 'like'), { likes: 1, dislikes: 0 });
+  assert.deepEqual(await repo.setReaction(pid, 'dev-b', 'like'), { likes: 2, dislikes: 0 });
+  assert.deepEqual(await repo.setReaction(pid, 'dev-a', 'dislike'), { likes: 1, dislikes: 1 });
+  const pl = (await repo.getRegionPlaces(r.id))[0];
+  assert.equal(pl.likes, 1);
+  assert.equal(pl.dislikes, 1);
+  assert.deepEqual(await repo.setReaction(pid, 'dev-a', null), { likes: 1, dislikes: 0 });
+  await repo.setReaction(pid, 'dev-b', null);
+
   const r2 = await repo.createRegion({ query: q + 'b', name: q + 'b' });
   await repo.mergeRegion(r2.id, r.id, q + 'b');
   assert.equal((await repo.getRegion(r2.id)).status, 'merged');

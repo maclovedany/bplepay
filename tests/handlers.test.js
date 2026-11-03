@@ -19,6 +19,7 @@ function fakeRepo(seed = {}) {
     async failRegion(id, error) { calls.push(['failRegion', id, error]); Object.assign(regions.get(Number(id)), { status: 'failed', error }); },
     async getRegionPlaces(id) { return seed.places?.[id] ?? []; },
     async setSurvey(naverId, status) { calls.push(['setSurvey', naverId, status]); },
+    async setReaction(naverId, deviceId, kind) { calls.push(['setReaction', naverId, deviceId, kind]); return { likes: kind === 'like' ? 1 : 0, dislikes: kind === 'dislike' ? 1 : 0 }; },
     async deleteRegion(id) { calls.push(['deleteRegion', Number(id)]); regions.delete(Number(id)); },
     async statsInput() { return seed.stats ?? { regions: [], links: [], surveys: [] }; },
   };
@@ -208,4 +209,25 @@ test('GET region with q returns the alias filter', async () => {
   const res2 = fakeRes();
   await createHandlers(repo).regionGet({ method: 'GET', query: { id: '1' } }, res2);
   assert.equal(res2.body.filter, null);
+});
+
+// ---- 좋아요 / 싫어요 ----
+test('PUT reaction rejects a bad kind or a missing device id', async () => {
+  const repo = fakeRepo();
+  let res = fakeRes();
+  await createHandlers(repo).reactionPut({ method: 'PUT', query: { naverId: 'a' }, body: { device_id: 'd1', kind: 'love' } }, res);
+  assert.equal(res.statusCode, 400);
+  res = fakeRes();
+  await createHandlers(repo).reactionPut({ method: 'PUT', query: { naverId: 'a' }, body: { kind: 'like' } }, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(repo.calls.length, 0);
+});
+
+test('PUT reaction stores like / dislike / null per device and returns the counts', async () => {
+  const repo = fakeRepo();
+  const res = fakeRes();
+  await createHandlers(repo).reactionPut({ method: 'PUT', query: { naverId: 'a' }, body: { device_id: 'd1', kind: 'like' } }, res);
+  assert.deepEqual(res.body, { likes: 1, dislikes: 0 });
+  await createHandlers(repo).reactionPut({ method: 'PUT', query: { naverId: 'a' }, body: { device_id: 'd1', kind: null } }, fakeRes());
+  assert.deepEqual(repo.calls, [['setReaction', 'a', 'd1', 'like'], ['setReaction', 'a', 'd1', null]]);
 });

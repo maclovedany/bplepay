@@ -4,6 +4,7 @@ import { MESSAGES } from '../lib/messages.js';
 
 const WAIT_MS = 3 * 60 * 1000;     // 워커가 집어 가지 않은 채 3분 → 워커가 꺼진 것으로 본다
 const RUN_MS = 10 * 60 * 1000;     // 집어 간 뒤 10분(식당 호출 최대 4번 × 2분 + 여유) → 수집 중 죽은 것으로 본다
+const REACTION_VALUES = new Set(['like', 'dislike', null]);
 const SURVEY_VALUES = new Set(['yes', 'no', null]);
 
 const publicRegion = (r) => ({
@@ -84,6 +85,16 @@ export function createHandlers(repo, { now = () => Date.now() } = {}) {
       if (!SURVEY_VALUES.has(status)) return res.status(400).json({ error: 'status must be yes, no or null' });
       await repo.setSurvey(String(req.query.naverId), status);
       res.status(200).json({ ok: true });
+    },
+
+    // 좋아요/싫어요. 로그인이 없으니 브라우저가 만든 device_id 로 기기당 하나만 센다.
+    async reactionPut(req, res) {
+      const kind = req.body?.kind ?? null;
+      const deviceId = typeof req.body?.device_id === 'string' ? req.body.device_id.trim().slice(0, 64) : '';
+      if (!REACTION_VALUES.has(kind)) return res.status(400).json({ error: 'kind must be like, dislike or null' });
+      if (!deviceId) return res.status(400).json({ error: 'device_id required' });
+      const counts = await repo.setReaction(String(req.query.naverId), deviceId, kind);
+      res.status(200).json(counts);
     },
 
     async statsGet(req, res) {

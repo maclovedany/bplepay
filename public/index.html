@@ -61,6 +61,7 @@
             <button type="button" class="chip" data-filter="yes">가능</button>
             <button type="button" class="chip" data-filter="no">불가능</button>
             <button type="button" class="chip chip-near" data-sort="near" title="내 위치에서 가까운 순으로 정렬">가까운 순</button>
+            <button type="button" class="chip chip-likes" data-sort="likes" title="좋아요 많은 순으로 정렬">좋아요 순</button>
           </div>
           <ul id="place-list" class="place-list"></ul>
         </section>
@@ -89,6 +90,10 @@
         <div class="sheet-route">
           <button type="button" id="btn-route" class="btn-route">길찾기</button>
           <span id="sheet-dist" class="muted"></span>
+          <span class="sheet-react">
+            <button type="button" id="btn-like" class="btn-react" title="좋아요">👍 <b id="like-count">0</b></button>
+            <button type="button" id="btn-dislike" class="btn-react" title="싫어요">👎 <b id="dislike-count">0</b></button>
+          </span>
         </div>
       </div>
     </main>

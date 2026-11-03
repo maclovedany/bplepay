@@ -12,9 +12,10 @@
     sheet: $('sheet'), sheetClose: $('sheet-close'), sheetName: $('sheet-name'), sheetCat: $('sheet-category'),
     sheetAddr: $('sheet-address'), sheetPhone: $('sheet-phone'), btnYes: $('btn-yes'), btnNo: $('btn-no'),
     handle: $('sheet-handle'), resizer: $('panel-resizer'), locate: $('btn-locate'), route: $('btn-route'), sheetDist: $('sheet-dist'),
+    btnLike: $('btn-like'), btnDislike: $('btn-dislike'), likeCount: $('like-count'), dislikeCount: $('dislike-count'),
   };
 
-  const state = { regionId: null, region: null, places: [], filter: 'all', selected: null, pollTimer: null, refreshTimer: null, query: '', catFilter: null, me: null, sortNear: false };
+  const state = { regionId: null, region: null, places: [], filter: 'all', selected: null, pollTimer: null, refreshTimer: null, query: '', catFilter: null, me: null, sort: null };  // sort: null | 'near' | 'likes'
   const markers = new Map();
   let polygonLayer = null;
 
@@ -213,11 +214,13 @@
     try {
       const data = await api(regionUrl());
       if (data.region.status !== 'ready') return;
-      const byId = new Map(data.places.map((p) => [p.naver_id, p.survey]));
+      const byId = new Map(data.places.map((p) => [p.naver_id, p]));
       let changed = false;
       for (const p of state.places) {
-        const s = byId.get(p.naver_id) ?? null;
+        const n = byId.get(p.naver_id);
+        const s = n?.survey ?? null;
         if (s !== p.survey) { p.survey = s; changed = true; updateMarker(p); }
+        if (n && ((n.likes || 0) !== (p.likes || 0) || (n.dislikes || 0) !== (p.dislikes || 0))) { p.likes = n.likes || 0; p.dislikes = n.dislikes || 0; changed = true; }
       }
       if (changed) { renderList(); renderHead(); if (state.selected) renderSheet(state.selected); }
     } catch { /* 다음 주기에 다시 */ }
@@ -296,7 +299,8 @@
   function renderList() {
     el.list.innerHTML = '';
     let rows = state.places.filter(matchesFilter);
-    if (state.sortNear && state.me) rows = rows.map((p) => [distanceTo(p), p]).sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+    if (state.sort === 'near' && state.me) rows = rows.map((p) => [distanceTo(p), p]).sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+    else if (state.sort === 'likes') rows = rows.slice().sort((a, b) => (b.likes || 0) - (a.likes || 0) || (a.dislikes || 0) - (b.dislikes || 0) || a.name.localeCompare(b.name, 'ko'));
     for (const p of rows) {
       const li = document.createElement('li');
       const btn = document.createElement('button');
@@ -305,7 +309,8 @@
       btn.className = state.selected?.naver_id === p.naver_id ? 'is-selected' : '';
       const badge = p.survey === 'yes' ? '<span class="badge yes">가능</span>' : p.survey === 'no' ? '<span class="badge no">불가능</span>' : '<span class="badge none">미조사</span>';
       const dist = state.me ? `<span class="p-dist">${fmtDist(distanceTo(p))}</span>` : '';
-      btn.innerHTML = `<span class="p-name">${esc(p.name)}<span class="p-cat">${esc(p.category || '')}</span></span>${badge}<span class="p-addr">${dist}${esc(p.road_address || p.address || '')}</span>`;
+      const likes = p.likes ? `<span class="p-likes">👍 ${p.likes}</span>` : '';
+      btn.innerHTML = `<span class="p-name">${esc(p.name)}<span class="p-cat">${esc(p.category || '')}</span>${likes}</span>${badge}<span class="p-addr">${dist}${esc(p.road_address || p.address || '')}</span>`;
       btn.addEventListener('click', () => select(p, true));
       li.appendChild(btn);
       el.list.appendChild(li);
@@ -315,11 +320,16 @@
   el.chips.addEventListener('click', (ev) => {
     const chip = ev.target.closest('.chip');
     if (!chip) return;
-    if (chip.dataset.sort === 'near') {
-      // 가까운 순: 내 위치가 있어야 한다. 없으면 먼저 물어본다.
-      const turnOn = !state.sortNear;
-      const apply = (on) => { state.sortNear = on; chip.classList.toggle('is-active', on); renderList(); };
-      if (turnOn && !state.me) locate((ok) => apply(ok));
+    if (chip.dataset.sort) {
+      // 정렬 칩(가까운 순 / 좋아요 순)은 하나만 켜진다. 다시 누르면 꺼진다.
+      const kind = chip.dataset.sort;
+      const turnOn = state.sort !== kind;
+      const apply = (on) => {
+        state.sort = on ? kind : null;
+        for (const c of el.chips.querySelectorAll('.chip[data-sort]')) c.classList.toggle('is-active', c.dataset.sort === state.sort);
+        renderList();
+      };
+      if (turnOn && kind === 'near' && !state.me) locate((ok) => apply(ok));   // 가까운 순은 내 위치가 있어야 한다
       else apply(turnOn);
       return;
     }
@@ -374,7 +384,42 @@
     el.btnYes.classList.toggle('is-on', p.survey === 'yes');
     el.btnNo.classList.toggle('is-on', p.survey === 'no');
     el.sheetDist.textContent = state.me ? `내 위치에서 ${fmtDist(distanceTo(p))}` : '';
+    el.likeCount.textContent = p.likes || 0;
+    el.dislikeCount.textContent = p.dislikes || 0;
+    const mine = myReactions[p.naver_id] || null;
+    el.btnLike.classList.toggle('is-on', mine === 'like');
+    el.btnDislike.classList.toggle('is-on', mine === 'dislike');
   }
+
+  // ---------- 좋아요 / 싫어요 ----------
+  // 로그인이 없으므로 브라우저마다 임의의 device_id 를 만들어 기기당 하나만 센다. 내가 누른 것은 브라우저에 기억한다.
+  const deviceId = localStorage.getItem('deviceId') || (() => { const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()); localStorage.setItem('deviceId', id); return id; })();
+  const myReactions = JSON.parse(localStorage.getItem('myReactions') || '{}');
+  async function react(kind) {
+    const p = state.selected;
+    if (!p) return;
+    const next = myReactions[p.naver_id] === kind ? null : kind;   // 같은 것을 다시 누르면 취소
+    const before = { mine: myReactions[p.naver_id] || null, likes: p.likes || 0, dislikes: p.dislikes || 0 };
+    // 화면 먼저
+    p.likes = before.likes - (before.mine === 'like') + (next === 'like');
+    p.dislikes = before.dislikes - (before.mine === 'dislike') + (next === 'dislike');
+    if (next) myReactions[p.naver_id] = next; else delete myReactions[p.naver_id];
+    localStorage.setItem('myReactions', JSON.stringify(myReactions));
+    renderSheet(p); renderList();
+    try {
+      const counts = await api('/api/places/' + encodeURIComponent(p.naver_id) + '/reaction', { method: 'PUT', body: JSON.stringify({ device_id: deviceId, kind: next }) });
+      p.likes = counts.likes; p.dislikes = counts.dislikes;
+      renderSheet(p); renderList();
+    } catch (e) {
+      p.likes = before.likes; p.dislikes = before.dislikes;
+      if (before.mine) myReactions[p.naver_id] = before.mine; else delete myReactions[p.naver_id];
+      localStorage.setItem('myReactions', JSON.stringify(myReactions));
+      renderSheet(p); renderList();
+      alert('저장하지 못했습니다: ' + e.message);
+    }
+  }
+  el.btnLike.addEventListener('click', () => react('like'));
+  el.btnDislike.addEventListener('click', () => react('dislike'));
   // 네이버 지도 길찾기(도보)를 새 탭으로 연다. 내 위치가 있으면 출발지로 넣는다.
   function routeUrl(p) {
     const goal = `${p.lng},${p.lat},${encodeURIComponent(p.name)}`;
