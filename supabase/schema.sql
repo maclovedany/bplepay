@@ -5,7 +5,7 @@ create table if not exists regions (
   id bigint generated always as identity primary key,
   query text not null,
   name text not null,
-  source_kind text check (source_kind in ('develope','adm')),
+  source_kind text check (source_kind in ('develope','adm','public')),  -- public: 공공데이터(소상공인 상가정보)로 수집
   source_key text unique,
   source_name text,
   polygon jsonb,
