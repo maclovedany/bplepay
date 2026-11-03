@@ -137,6 +137,15 @@ test('existing failed region with same source_key → merge into it and re-colle
   assert.equal(runRepl.scripts.length, 1);
 });
 
+test('re-collecting a region that already holds the polygon does not merge into itself', async () => {
+  const repo = fakeRepo({ existing: { id: 42, status: 'collecting' } });
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06260101', name: '범어동', feature: square }, places: { items: [], leaves: 1, pending: [] } });
+  await collectRegion(repo, region, { runRepl, agent: noAgent });
+  assert.equal(repo.calls.some((c) => c[0] === 'mergeRegion'), false);
+  assert.ok(repo.calls.some((c) => c[0] === 'setRegionPolygon'));
+  assert.ok(repo.calls.some((c) => c[0] === 'markReady'));
+});
+
 test('existing collecting region with same source_key → merge', async () => {
   const repo = fakeRepo({ existing: { id: 7, status: 'collecting' } });
   const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '06110545', name: '삼덕동', feature: square } });

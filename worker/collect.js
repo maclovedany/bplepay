@@ -58,7 +58,8 @@ export async function collectRegion(repo, region, { runRepl, log = () => {}, age
       return;
     }
     const source_key = r.kind + ':' + r.key;
-    const existing = await repo.findRegionBySourceKey(source_key);
+    const found = await repo.findRegionBySourceKey(source_key);
+    const existing = found && found.id !== region.id ? found : null; // 다시 수집 중인 자기 자신은 제외
     if (existing && existing.status === 'failed') {
       // 같은 구획이 예전에 실패한 채 남아 있으면 그 기록에 합치고 다시 수집시킨다.
       // (옛 실패 이유를 그대로 베끼면 수집 코드가 나아져도 영원히 같은 오류가 난다.)
