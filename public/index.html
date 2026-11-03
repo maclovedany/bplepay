@@ -60,15 +60,22 @@
             <button type="button" class="chip" data-filter="none">미조사</button>
             <button type="button" class="chip" data-filter="yes">가능</button>
             <button type="button" class="chip" data-filter="no">불가능</button>
+            <button type="button" class="chip chip-near" data-sort="near" title="내 위치에서 가까운 순으로 정렬">가까운 순</button>
           </div>
           <ul id="place-list" class="place-list"></ul>
         </section>
       </div>
       <div id="sheet-handle" class="sheet-handle" aria-hidden="true"><span></span></div>
+      <div id="panel-resizer" class="panel-resizer" title="드래그해서 너비 조절" aria-hidden="true"></div>
     </aside>
 
     <main id="map-wrap" class="map-wrap">
       <div id="map"></div>
+      <button type="button" id="btn-locate" class="btn-locate" title="내 위치로 이동">◎ 내 위치</button>
+      <div id="mascot" class="mascot" aria-hidden="true">
+        <div class="mascot-flip"><div class="mascot-act"><img src="/assets/cat.png" alt=""></div></div>
+        <div class="mascot-fx"></div>
+      </div>
       <div id="sheet" class="sheet" hidden>
         <button type="button" id="sheet-close" class="sheet-close" aria-label="닫기">×</button>
         <h3 id="sheet-name" class="sheet-name"></h3>
@@ -79,11 +86,16 @@
           <button type="button" id="btn-yes" class="btn-survey btn-yes">비플페이 가능</button>
           <button type="button" id="btn-no" class="btn-survey btn-no">불가능</button>
         </div>
+        <div class="sheet-route">
+          <button type="button" id="btn-route" class="btn-route">길찾기</button>
+          <span id="sheet-dist" class="muted"></span>
+        </div>
       </div>
     </main>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="/app.js"></script>
+  <script src="/mascot.js"></script>
 </body>
 </html>
