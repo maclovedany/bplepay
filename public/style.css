@@ -203,7 +203,8 @@ body.is-resizing { user-select: none; cursor: col-resize; }
 }
 
 /* ---------- 고양이 마스코트 ---------- */
-.mascot { position: absolute; right: 14px; bottom: 26px; width: 110px; z-index: 450; pointer-events: none; transition: transform 0.25s ease-out; will-change: transform; }
+.mascot { position: absolute; left: 0; top: 0; width: 120px; z-index: 450; pointer-events: none; will-change: transform; }
+.mascot img { border-radius: 16px; }
 .mascot-flip { transition: transform 0.2s; }
 .mascot-flip.flip { transform: scaleX(-1); }
 .mascot-act { transform-origin: 50% 100%; }
@@ -271,5 +272,5 @@ body.is-resizing { user-select: none; cursor: col-resize; }
   .leaflet-top.leaflet-left { top: 64px; }
   .panel-resizer { display: none; }
   .btn-locate { top: 64px; }
-  .mascot { width: 68px; right: 8px; top: 108px; bottom: auto; }
+  .mascot { width: 76px; }
 }
