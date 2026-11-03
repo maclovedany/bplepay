@@ -14,7 +14,7 @@ function fakeRepo({ existing = null } = {}) {
   return {
     calls,
     failRegion: rec('failRegion'), mergeRegion: rec('mergeRegion'), setRegionPolygon: rec('setRegionPolygon'),
-    upsertPlaces: rec('upsertPlaces'), linkPlaces: rec('linkPlaces'), markReady: rec('markReady'), upsertAlias: rec('upsertAlias'), setRegionAi: rec('setRegionAi'),
+    upsertPlaces: rec('upsertPlaces'), linkPlaces: rec('linkPlaces'), markReady: rec('markReady'), upsertAlias: rec('upsertAlias'), setRegionAi: rec('setRegionAi'), resetToCollecting: rec('resetToCollecting'),
     async findRegionBySourceKey(key) { calls.push(['findRegionBySourceKey', key]); return existing; },
   };
 }
@@ -129,11 +129,11 @@ test('generated REPL scripts parse as async JavaScript', () => {
 });
 
 // ---- 리뷰 반영: 같은 구획이 failed/collecting 으로 남아 있을 때 ----
-test('existing failed region with same source_key → fail with its error, no polygon write', async () => {
+test('existing failed region with same source_key → merge into it and re-collect it (no stale error copy)', async () => {
   const repo = fakeRepo({ existing: { id: 7, status: 'failed', error: MESSAGES.TOO_WIDE } });
   const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '04150109', name: '교동', feature: square } });
   await collectRegion(repo, region, { runRepl, agent: noAgent });
-  assert.deepEqual(repo.calls, [['findRegionBySourceKey', 'adm:04150109'], ['failRegion', 42, MESSAGES.TOO_WIDE]]);
+  assert.deepEqual(repo.calls, [['findRegionBySourceKey', 'adm:04150109'], ['mergeRegion', 42, 7, '동성로'], ['resetToCollecting', 7]]);
   assert.equal(runRepl.scripts.length, 1);
 });
 
