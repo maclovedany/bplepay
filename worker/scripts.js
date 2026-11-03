@@ -13,6 +13,7 @@ ${PARSER_SRC}
 const page = await openTab(${JSON.stringify(url)});
 await sleep(5000);
 let result = null;
+let firstHit = null; // 구획이 없을 때 기준점으로 쓸 첫 번째 검색 결과
 const admUrl = await page.evaluate(() => performance.getEntriesByType('resource').map(e => e.name).find(u => /\\/p\\/api\\/polygon\\?.*order=adm/.test(u)) || null);
 if (admUrl) {
   const fc = await page.evaluate(async (u) => (await fetch(u, { headers: { accept: 'application/json' } })).json(), admUrl);
@@ -21,15 +22,19 @@ if (admUrl) {
 } else {
   const frame = page.frames().find(f => /pcmap\\.place\\.naver\\.com\\/place\\/list/.test(f.url()));
   if (frame) {
-    const cands = await frame.evaluate(${PARSER_SRC} + '; (' + (() => {
+    const parsed = await frame.evaluate(${PARSER_SRC} + '; (' + (() => {
       const text = Array.from(document.scripts).map(s => s.textContent).find(t => t.includes('__APOLLO_STATE__')) || '';
       const st = parseApolloState(text) || {};
       const items = Object.keys(st).filter(k => k.startsWith('PlaceListBusinessesItem:')).map(k => st[k]);
-      return items
+      const first = items[0] ? { x: Number(items[0].x), y: Number(items[0].y), name: items[0].name } : null;
+      const cands = items
         .filter(i => i.poiInfo && i.poiInfo.polygon && i.poiInfo.polygon.shapeKey && i.poiInfo.polygon.shapeKey.__ref)
         .slice(0, 5)
         .map(i => ({ id: i.poiInfo.polygon.shapeKey.__ref.split(':')[1], x: i.x, y: i.y, name: i.name, category: i.category || '', address: i.commonAddress || i.address || '' }));
+      return { cands, first };
     }).toString() + ')()');
+    const cands = parsed && parsed.cands;
+    if (parsed && parsed.first && parsed.first.x && parsed.first.y) firstHit = parsed.first;
     if (cands && cands.length) {
       const features = {};
       for (const c of cands) {
@@ -43,7 +48,19 @@ if (admUrl) {
     }
   }
 }
-console.log('@@RESULT@@' + JSON.stringify(result || { error: 'no_polygon' }));
+if (!result) {
+  // 구획이 없어도 첫 번째 검색 결과(중앙로역, 경상감영공원 …)의 좌표를 돌려준다. 공공데이터 대체 수집의 기준점.
+  // 결과가 없으면 목록 URL 의 x, y(지도 중심).
+  let center = firstHit;
+  const listFrame = page.frames().find(f => /pcmap\\.place\\.naver\\.com\\/place\\/list/.test(f.url()));
+  if (!center && listFrame) {
+    const u = new URL(listFrame.url());
+    const x = Number(u.searchParams.get('x')), y = Number(u.searchParams.get('y'));
+    if (x && y) center = { x, y, name: null };
+  }
+  result = { error: 'no_polygon', center };
+}
+console.log('@@RESULT@@' + JSON.stringify(result));
 `;
 }
 

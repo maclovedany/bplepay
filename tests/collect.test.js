@@ -27,6 +27,64 @@ function fakeRunRepl({ region: r, places: p }) {
   return fn;
 }
 
+// ---- 공공데이터 대체 수집 ----
+const store = (id, road, lng, lat) => ({ naver_id: id, name: 'S' + id, category: '한식', road_address: road + ' 1', address: null, phone: null, lng, lat, road, road_code: 'RC-' + road });
+const C = { x: 128.5958, y: 35.8667 };
+function fakePublic(stores, { enabled = true } = {}) {
+  const calls = [];
+  return { enabled, calls, stdrYm: '202609', async fetchFoodStores(q) { calls.push(q); return stores; } };
+}
+const roadAgent = (index) => ({ ...noAgent, async pickRoad() { return { index, reason: null }; } });
+
+test('no polygon + public data: road chosen → only that road\'s stores, hull polygon, source_kind public', async () => {
+  const repo = fakeRepo();
+  const stores = [store('a', '중앙대로', 128.595, 35.866), store('b', '중앙대로', 128.596, 35.870), store('c', '중앙대로', 128.5955, 35.868), store('d', '달구벌대로', 128.60, 35.866)];
+  const runRepl = fakeRunRepl({ region: { error: 'no_polygon', center: C } });
+  const publicData = fakePublic(stores);
+  await collectRegion(repo, { id: 42, query: '중앙로' }, { runRepl, agent: roadAgent(0), publicData });
+  assert.deepEqual(publicData.calls, [{ cx: C.x, cy: C.y, radius: 1000 }]);
+  const poly = repo.calls.find((c) => c[0] === 'setRegionPolygon');
+  assert.equal(poly[2].source_kind, 'public');
+  assert.equal(poly[2].source_key, 'public:road:RC-중앙대로');
+  assert.match(poly[2].source_name, /중앙대로/);
+  assert.equal(poly[2].polygon.type, 'Polygon');
+  const up = repo.calls.find((c) => c[0] === 'upsertPlaces')[1];
+  assert.deepEqual(up.map((i) => i.naver_id), ['a', 'b', 'c']);
+  assert.equal('road' in up[0], false, 'road 필드는 places 에 넣지 않는다');
+  assert.ok(repo.calls.some((c) => c[0] === 'markReady'));
+  assert.equal(repo.calls.some((c) => c[0] === 'failRegion'), false);
+});
+
+test('no polygon + public data: no road → stores within 300 m of the center', async () => {
+  const repo = fakeRepo();
+  const near = store('n', '종로', C.x + 0.001, C.y);        // ≈ 90 m
+  const far = store('f', '종로', C.x + 0.01, C.y);          // ≈ 900 m
+  const runRepl = fakeRunRepl({ region: { error: 'no_polygon', center: C } });
+  await collectRegion(repo, { id: 42, query: '약령시' }, { runRepl, agent: roadAgent(null), publicData: fakePublic([near, far]) });
+  const poly = repo.calls.find((c) => c[0] === 'setRegionPolygon');
+  assert.equal(poly[2].source_key, 'public:pt:128.5958,35.8667');
+  assert.deepEqual(repo.calls.find((c) => c[0] === 'upsertPlaces')[1].map((i) => i.naver_id), ['n']);
+});
+
+test('no polygon + public data returns nothing → NO_POLYGON', async () => {
+  const repo = fakeRepo();
+  const runRepl = fakeRunRepl({ region: { error: 'no_polygon', center: C } });
+  await collectRegion(repo, region, { runRepl, agent: roadAgent(null), publicData: fakePublic([]) });
+  assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.NO_POLYGON]);
+});
+
+test('no polygon without a public-data key → NO_POLYGON, API not called', async () => {
+  const repo = fakeRepo();
+  const publicData = fakePublic([store('a', '중앙대로', 1, 1)], { enabled: false });
+  await collectRegion(repo, region, { runRepl: fakeRunRepl({ region: { error: 'no_polygon', center: C } }), agent: noAgent, publicData });
+  assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.NO_POLYGON]);
+  assert.equal(publicData.calls.length, 0);
+});
+
+test('regionScript returns the search center alongside no_polygon', () => {
+  assert.ok(regionScript('중앙로').includes("center"));
+});
+
 test('no_polygon → failRegion with NO_POLYGON', async () => {
   const repo = fakeRepo();
   await collectRegion(repo, region, { runRepl: fakeRunRepl({ region: { error: 'no_polygon' } }), agent: noAgent });

@@ -471,3 +471,20 @@ git push                                # 자동 배포 트리거
 - [ ] Step 4: `node scripts/smoke-collect.js 동성로` → `agent: "동성로" → "대구 중구 동성로"`, 후보 목록, 588곳. 워커 재시작 후 배포 주소에서 "교동" 검색 → 화면에 "AI 해석" 표시; 넓은 지역 검색 → 실패 화면에 제안 버튼.
 - [ ] Step 5: Commit, push, 문서 갱신(spec 7절, README, architecture.md, 단계별프롬프트.md 16단계)
 
+
+### Task 14: 공공데이터 대체 수집 (설계서 8절)
+
+**Files:** Create `worker/publicdata.js`, `tests/publicdata.test.js`; Modify `lib/geo.js` (`convexHull`), `worker/agent.js` (`pickRoad`), `worker/scripts.js` (no_polygon 에 `center`), `worker/collect.js`, `api/_handlers.js` (`source_kind` 노출), `public/app.js`, `scripts/smoke-collect.js`, 테스트들.
+
+**Interfaces:**
+- `convexHull(points: [lng,lat][]) → Polygon geometry` — 점 3개 미만이면 bbox 를 0.0003도 넓힌 사각형.
+- `normalizeStore(raw) → {naver_id: bizesId, name, category, road_address, address, phone: null, lng, lat, road, road_code}`; `shortRoad('대구광역시 중구 중앙대로') → '중앙대로'`.
+- `fetchFoodStores({cx, cy, radius}, {key, fetchImpl, pageSize=1000, maxPages=5}) → Promise<store[]>`; `createPublicData({key}) → {enabled, fetchFoodStores, stdrYm}`.
+- `agent.pickRoad(raw, roads: string[]) → {index: number|null, reason}`.
+- `regionScript` no_polygon 결과: `{error:'no_polygon', center:{x,y}|null}`.
+- `collectRegion(repo, region, {runRepl, log, agent, publicData})`.
+
+- [ ] Step 1: `tests/geo.test.js`(convexHull 2건), `tests/publicdata.test.js`(normalize·shortRoad·페이지·오류 4건), `tests/agent.test.js`(pickRoad 2건), `tests/collect.test.js`(도로/반경/빈 결과/키 없음 4건), `tests/handlers.test.js`(source_kind 1건) → RED
+- [ ] Step 2: 구현 → `node --test "tests/**/*.test.js"` PASS
+- [ ] Step 3: `node scripts/smoke-collect.js 중앙로` → `public: road 중앙대로, N stores`; 워커 재시작 후 배포 주소에서 "중앙로" 검색 → 점선 구획과 핀, 안내 문구
+- [ ] Step 4: Commit, push, 문서(README, architecture.md, 단계별프롬프트.md 20단계)

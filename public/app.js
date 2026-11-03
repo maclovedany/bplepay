@@ -179,7 +179,9 @@
     el.recent.hidden = true;
     el.region.hidden = false;
     el.name.textContent = region.name;
-    el.source.textContent = region.source_name && region.source_name !== region.name ? `구획: ${region.source_name}` : '';
+    el.source.textContent = region.source_kind === 'public'
+      ? `네이버에 구획이 없어 공공데이터(소상공인 상가정보)로 수집했습니다 · ${region.source_name || ''}`
+      : (region.source_name && region.source_name !== region.name ? `구획: ${region.source_name}` : '');
     const aiText = region.search_query && region.search_query !== region.name
       ? `AI 해석: ${region.name} → ${region.search_query}${region.ai_note ? ' · ' + region.ai_note : ''}`
       : (region.ai_note ? `AI: ${region.ai_note}` : '');
@@ -197,7 +199,9 @@
 
     if (region.polygon) {
       polygonLayer = L.geoJSON({ type: 'Feature', geometry: region.polygon }, {
-        style: { color: 'rgb(57,133,247)', weight: 2, fillColor: 'rgb(56,229,255)', fillOpacity: 0.15 },
+        style: region.source_kind === 'public'
+          ? { color: '#a05a00', weight: 2, dashArray: '6 6', fillColor: '#ffb84d', fillOpacity: 0.12 }   // 공공데이터 구획은 점선
+          : { color: 'rgb(57,133,247)', weight: 2, fillColor: 'rgb(56,229,255)', fillOpacity: 0.15 },
         interactive: false,
       }).addTo(map);
       // 모바일에서는 아래 패널(46vh)에 가려지지 않게 아래쪽 여백을 준다.

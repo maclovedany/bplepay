@@ -66,3 +66,16 @@ test('matchCategories returns existing categories matching the wish, [] on failu
   assert.deepEqual(await a.matchCategories('한식집', cats), ['한식', '백반,가정식', '찌개,전골']);
   assert.deepEqual(await createAgent({ askJson: boom }).matchCategories('한식집', cats), []);
 });
+
+test('pickRoad returns the model-chosen road index', async () => {
+  const roads = ['달구벌대로', '중앙대로', '경상감영길'];
+  const a = createAgent({ askJson: ok({ index: 1, reason: '중앙로는 중앙대로의 옛 이름' }) });
+  assert.deepEqual(await a.pickRoad('중앙로', roads), { index: 1, reason: '중앙로는 중앙대로의 옛 이름' });
+  assert.deepEqual(await createAgent({ askJson: ok({ index: -1, reason: '도로 아님' }) }).pickRoad('약령시', roads), { index: null, reason: '도로 아님' });
+});
+
+test('pickRoad falls back to an exact last-word match when the model fails', async () => {
+  const roads = ['달구벌대로', '중앙대로'];
+  assert.deepEqual(await createAgent({ askJson: boom }).pickRoad('대구 중구 중앙대로', roads), { index: 1, reason: null });
+  assert.deepEqual(await createAgent({ askJson: boom }).pickRoad('약령시', roads), { index: null, reason: null });
+});

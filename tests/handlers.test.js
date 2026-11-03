@@ -82,13 +82,14 @@ test('GET fresh collecting stays collecting', async () => {
 
 test('GET merged region follows merged_into and includes places', async () => {
   const repo = fakeRepo({
-    regions: { 1: { id: 1, name: '동성로', status: 'ready', polygon: { type: 'Polygon', coordinates: [] }, bbox: [0, 0, 1, 1], source_name: 'S' }, 2: { id: 2, status: 'merged', merged_into: 1 } },
+    regions: { 1: { id: 1, name: '동성로', status: 'ready', polygon: { type: 'Polygon', coordinates: [] }, bbox: [0, 0, 1, 1], source_name: 'S', source_kind: 'public' }, 2: { id: 2, status: 'merged', merged_into: 1 } },
     places: { 1: [{ naver_id: 'a', name: 'A', survey: 'yes' }] },
   });
   const res = fakeRes();
   await createHandlers(repo).regionGet({ method: 'GET', query: { id: '2' } }, res);
   assert.equal(res.body.region.id, 1);
   assert.equal(res.body.region.source_name, 'S');
+  assert.equal(res.body.region.source_kind, 'public');
   assert.deepEqual(res.body.places, [{ naver_id: 'a', name: 'A', survey: 'yes' }]);
 });
 

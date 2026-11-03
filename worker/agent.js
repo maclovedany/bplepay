@@ -80,6 +80,28 @@ export function createAgent({ askJson = defaultAskJson, context = DEFAULT_CONTEX
       }
     },
 
+    // 네이버에 구획이 없을 때: 공공데이터 가게들의 도로명 목록에서 검색어가 가리키는 도로를 고른다. 없으면 index null.
+    async pickRoad(raw, roads) {
+      const list = Array.isArray(roads) ? roads : [];
+      if (!list.length) return { index: null, reason: null };
+      const lastWord = String(raw || '').trim().split(/\s+/).pop();
+      const exact = list.indexOf(lastWord);
+      try {
+        const out = await askJson({
+          system: system('조사원이 입력한 검색어와, 그 근처 가게들의 도로명 목록을 본다. 검색어가 도로(…로, …길, …대로)를 가리키면 같은 도로의 번호(index)를 고른다. 옛 이름·줄임말도 인정한다(예: "중앙로" → "중앙대로"). "중앙대로81길"처럼 번호가 붙은 가지 길은 다른 도로다. 검색어가 도로가 아니면(명소, 가게 이름, 동 이름) index 를 -1 로 한다.'),
+          user: `검색어: ${raw}\n도로명 목록:\n${list.map((r, i) => `${i}. ${r}`).join('\n')}`,
+          schema: { type: 'OBJECT', properties: { index: { type: 'INTEGER' }, reason: S() }, required: ['index', 'reason'] },
+        });
+        const index = Number(out?.index);
+        const reason = String(out?.reason ?? '').trim() || null;
+        if (Number.isInteger(index) && index >= 0 && index < list.length) return { index, reason };
+        return { index: exact >= 0 ? exact : null, reason };
+      } catch (e) {
+        log(`agent pickRoad fallback: ${e.message}`);
+        return { index: exact >= 0 ? exact : null, reason: null };
+      }
+    },
+
     async suggestNarrower(raw, regionName) {
       try {
         const out = await askJson({

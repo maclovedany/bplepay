@@ -8,7 +8,7 @@ const SURVEY_VALUES = new Set(['yes', 'no', null]);
 
 const publicRegion = (r) => ({
   id: r.id, name: r.name, status: r.status, error: r.error ?? null,
-  source_name: r.source_name ?? null, polygon: r.polygon ?? null, bbox: r.bbox ?? null, created_at: r.created_at,
+  source_name: r.source_name ?? null, source_kind: r.source_kind ?? null, polygon: r.polygon ?? null, bbox: r.bbox ?? null, created_at: r.created_at,
   search_query: r.search_query ?? null, ai_note: r.ai_note ?? null, suggestions: Array.isArray(r.suggestions) ? r.suggestions : [],
   ai_excluded: r.ai_excluded ?? null,
 });
