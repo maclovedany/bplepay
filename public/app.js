@@ -7,13 +7,14 @@
     status: $('status'), collecting: $('status-collecting'), failed: $('status-failed'), error: $('status-error'), retry: $('retry-btn'),
     region: $('region'), name: $('region-name'), source: $('region-source'), stats: $('region-stats'), ai: $('region-ai'),
     suggestions: $('suggestions'), suggestionList: $('suggestion-list'),
+    excluded: $('region-excluded'), catFilter: $('cat-filter'), catFilterLabel: $('cat-filter-label'), catFilterOff: $('cat-filter-off'),
     chips: $('filter-chips'), list: $('place-list'),
     sheet: $('sheet'), sheetClose: $('sheet-close'), sheetName: $('sheet-name'), sheetCat: $('sheet-category'),
     sheetAddr: $('sheet-address'), sheetPhone: $('sheet-phone'), btnYes: $('btn-yes'), btnNo: $('btn-no'),
     handle: $('sheet-handle'),
   };
 
-  const state = { regionId: null, region: null, places: [], filter: 'all', selected: null, pollTimer: null, refreshTimer: null, query: '' };
+  const state = { regionId: null, region: null, places: [], filter: 'all', selected: null, pollTimer: null, refreshTimer: null, query: '', catFilter: null };
   const markers = new Map();
   let polygonLayer = null;
 
@@ -68,7 +69,7 @@
     showStatus('collecting');
     try {
       const { id } = await api('/api/regions', { method: 'POST', body: JSON.stringify({ query }) });
-      openRegion(id);
+      openRegion(id, query);
     } catch (e) {
       showStatus('failed', e.message);
     }
@@ -105,20 +106,24 @@
   }
 
   // ---------- 지역 열기 / 폴링 ----------
-  function openRegion(id) {
+  function openRegion(id, query = state.query) {
     state.regionId = id;
-    location.hash = '#r=' + id;
+    state.query = query || '';
+    location.hash = '#r=' + id + (state.query ? '&q=' + encodeURIComponent(state.query) : '');
     clearTimeout(state.pollTimer);
     clearInterval(state.refreshTimer);
     showStatus('collecting');
     pollRegion();
   }
 
+  const regionUrl = () => '/api/regions/' + state.regionId + (state.query ? '?q=' + encodeURIComponent(state.query) : '');
+
   async function pollRegion() {
     try {
-      const data = await api('/api/regions/' + state.regionId);
+      const data = await api(regionUrl());
       const { region } = data;
       if (region.status === 'ready') {
+        state.catFilter = data.filter && data.filter.categories.length ? { want: data.filter.want, set: new Set(data.filter.categories) } : null;
         renderRegion(region, data.places || []);
         state.refreshTimer = setInterval(refreshSurveys, 10000);
       } else if (region.status === 'failed') {
@@ -136,7 +141,7 @@
   async function refreshSurveys() {
     if (!state.regionId || !state.region) return;
     try {
-      const data = await api('/api/regions/' + state.regionId);
+      const data = await api(regionUrl());
       if (data.region.status !== 'ready') return;
       const byId = new Map(data.places.map((p) => [p.naver_id, p.survey]));
       let changed = false;
@@ -162,6 +167,10 @@
       : (region.ai_note ? `AI: ${region.ai_note}` : '');
     el.ai.hidden = !aiText;
     el.ai.textContent = aiText;
+    const ex = region.ai_excluded;
+    el.excluded.hidden = !(ex && ex.count);
+    if (ex && ex.count) el.excluded.textContent = `AI가 식당이 아닌 업종 ${ex.categories.length}종(${ex.categories.slice(0, 4).join(', ')}${ex.categories.length > 4 ? ' 외' : ''}) ${ex.count}곳을 제외했습니다.`;
+    renderCatFilter();
     renderHead();
 
     if (polygonLayer) map.removeLayer(polygonLayer);
@@ -178,18 +187,37 @@
       map.fitBounds(polygonLayer.getBounds(), { paddingTopLeft: [20, isMobile() ? 70 : 20], paddingBottomRight: [20, bottomPad] });
     }
     for (const p of state.places) addMarker(p);
+    applyMarkerVisibility();
     renderList();
     closeSheet();
   }
 
   function renderHead() {
-    const total = state.places.length;
-    const yes = state.places.filter((p) => p.survey === 'yes').length;
-    const no = state.places.filter((p) => p.survey === 'no').length;
+    const pool = state.places.filter(matchesCat);
+    const total = pool.length;
+    const yes = pool.filter((p) => p.survey === 'yes').length;
+    const no = pool.filter((p) => p.survey === 'no').length;
     el.stats.innerHTML = `식당 <b>${total}</b> · 조사 <b>${yes + no}</b> · 가능 <b>${yes}</b> · 불가능 <b>${no}</b>`;
   }
 
-  const matchesFilter = (p) => state.filter === 'all' || (state.filter === 'none' ? !p.survey : p.survey === state.filter);
+  const matchesCat = (p) => !state.catFilter || state.catFilter.set.has(p.category);
+  const matchesFilter = (p) => matchesCat(p) && (state.filter === 'all' || (state.filter === 'none' ? !p.survey : p.survey === state.filter));
+
+  function renderCatFilter() {
+    if (!state.catFilter) { el.catFilter.hidden = true; return; }
+    const n = state.places.filter(matchesCat).length;
+    el.catFilterLabel.textContent = `AI 필터: ${state.catFilter.want} · ${[...state.catFilter.set].join(', ')} (${n}곳)`;
+    el.catFilter.hidden = false;
+  }
+  function applyMarkerVisibility() {
+    for (const p of state.places) {
+      const m = markers.get(p.naver_id);
+      if (!m) continue;
+      if (matchesFilter(p)) { if (!map.hasLayer(m)) m.addTo(map); }
+      else if (map.hasLayer(m)) map.removeLayer(m);
+    }
+  }
+  el.catFilterOff.addEventListener('click', () => { state.catFilter = null; renderCatFilter(); renderList(); renderHead(); applyMarkerVisibility(); });
 
   function renderList() {
     el.list.innerHTML = '';
@@ -214,12 +242,7 @@
     state.filter = chip.dataset.filter;
     for (const c of el.chips.querySelectorAll('.chip')) c.classList.toggle('is-active', c === chip);
     renderList();
-    for (const p of state.places) {
-      const m = markers.get(p.naver_id);
-      if (!m) continue;
-      if (matchesFilter(p)) { if (!map.hasLayer(m)) m.addTo(map); }
-      else if (map.hasLayer(m)) map.removeLayer(m);
-    }
+    applyMarkerVisibility();
   });
 
   // ---------- 마커 ----------
@@ -281,7 +304,7 @@
     const next = p.survey === value ? null : value;
     const before = p.survey;
     p.survey = next;
-    updateMarker(p); renderSheet(p); renderList(); renderHead();
+    updateMarker(p); renderSheet(p); renderList(); renderHead(); applyMarkerVisibility();
     try {
       await api('/api/places/' + encodeURIComponent(p.naver_id) + '/survey', { method: 'PUT', body: JSON.stringify({ status: next }) });
     } catch (e) {
@@ -306,12 +329,13 @@
   }
 
   // ---------- 시작 ----------
+  const hashQuery = () => { const q = location.hash.match(/[#&]q=([^&]+)/); return q ? decodeURIComponent(q[1]) : ''; };
   const m = location.hash.match(/#r=(\d+)/);
-  if (m) openRegion(Number(m[1]));
+  if (m) openRegion(Number(m[1]), hashQuery());
   else loadRecent();
   window.addEventListener('hashchange', () => {
     const mm = location.hash.match(/#r=(\d+)/);
-    if (mm && Number(mm[1]) !== state.regionId) openRegion(Number(mm[1]));
+    if (mm && Number(mm[1]) !== state.regionId) openRegion(Number(mm[1]), hashQuery());
     if (!mm) { clearTimeout(state.pollTimer); clearInterval(state.refreshTimer); el.region.hidden = true; el.status.hidden = true; el.recent.hidden = false; loadRecent(); }
   });
 })();

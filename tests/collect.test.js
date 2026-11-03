@@ -109,11 +109,11 @@ test('existing collecting region with same source_key → merge', async () => {
 });
 
 // ---- AI 판단 층 ----
-function fakeAgent({ query = null, note = null, index = 0, reason = null, suggestions = [] } = {}) {
+function fakeAgent({ query = null, note = null, want = null, index = 0, reason = null, suggestions = [] } = {}) {
   const calls = [];
   return {
     calls,
-    async interpretQuery(raw) { calls.push(['interpretQuery', raw]); return { query: query ?? raw, note }; },
+    async interpretQuery(raw) { calls.push(['interpretQuery', raw]); return { query: query ?? raw, note, want }; },
     async chooseCandidate(raw, cands) { calls.push(['chooseCandidate', raw, cands.length]); return { index, reason }; },
     async suggestNarrower(raw, name) { calls.push(['suggestNarrower', raw, name]); return suggestions; },
   };
@@ -146,4 +146,43 @@ test('too_wide stores agent suggestions with the failure', async () => {
   const agent = fakeAgent({ suggestions: ['대구 중구 삼덕동1가', '대구 중구 삼덕동2가'] });
   await collectRegion(repo, region, { runRepl, agent });
   assert.deepEqual(repo.calls.at(-1), ['failRegion', 42, MESSAGES.TOO_WIDE, { suggestions: ['대구 중구 삼덕동1가', '대구 중구 삼덕동2가'] }]);
+});
+
+// ---- 업종 필터 ----
+function fakeAgent2(over = {}) {
+  const base = fakeAgent(over);
+  base.excludeNonFood = async (cats) => { base.calls.push(['excludeNonFood', cats]); return over.exclude ?? []; };
+  base.matchCategories = async (want, cats) => { base.calls.push(['matchCategories', want, cats]); return over.matched ?? []; };
+  return base;
+}
+const item = (id, category, lng = 5, lat = 5) => ({ naver_id: id, name: id, category, road_address: 'r', address: 'x', phone: null, lng, lat });
+
+test('non-food categories chosen by the agent are dropped and recorded', async () => {
+  const repo = fakeRepo();
+  const items = [item('a', '한식'), item('b', '미용실'), item('c', '미용실'), item('d', '카페,디저트')];
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '1', name: 'T', feature: square }, places: { items, leaves: 1 } });
+  const agent = fakeAgent2({ exclude: ['미용실'] });
+  await collectRegion(repo, region, { runRepl, agent });
+  assert.deepEqual(agent.calls.find((c) => c[0] === 'excludeNonFood')[1], ['한식', '미용실', '카페,디저트']);
+  assert.deepEqual(repo.calls.find((c) => c[0] === 'upsertPlaces')[1].map((p) => p.naver_id), ['a', 'd']);
+  assert.deepEqual(repo.calls.find((c) => c[0] === 'setRegionAi')[2].ai_excluded, { categories: ['미용실'], count: 2 });
+});
+
+test('wanted category → alias stores want and matched categories', async () => {
+  const repo = fakeRepo();
+  const items = [item('a', '한식'), item('b', '일식당')];
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '1', name: '을지로', feature: square }, places: { items, leaves: 1 } });
+  const agent = fakeAgent2({ query: '서울 중구 을지로', note: 'n', want: '한식집', matched: ['한식'] });
+  await collectRegion(repo, { id: 42, query: '을지로 근처 한식집' }, { runRepl, agent });
+  assert.deepEqual(agent.calls.find((c) => c[0] === 'matchCategories'), ['matchCategories', '한식집', ['한식', '일식당']]);
+  assert.deepEqual(repo.calls.at(-1), ['upsertAlias', '을지로 근처 한식집', 42, { want: '한식집', categories: ['한식'] }]);
+});
+
+test('merge path with a wanted category computes the filter from the existing region', async () => {
+  const repo = fakeRepo({ existing: { id: 7, status: 'ready' } });
+  repo.getRegionCategories = async (id) => { repo.calls.push(['getRegionCategories', id]); return ['한식', '카페,디저트']; };
+  const runRepl = fakeRunRepl({ region: { kind: 'adm', key: '1', name: '을지로', feature: square } });
+  const agent = fakeAgent2({ want: '한식집', matched: ['한식'] });
+  await collectRegion(repo, { id: 42, query: '을지로 한식' }, { runRepl, agent });
+  assert.deepEqual(repo.calls.at(-1), ['mergeRegion', 42, 7, '을지로 한식', { want: '한식집', categories: ['한식'] }]);
 });

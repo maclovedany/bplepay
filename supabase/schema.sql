@@ -17,12 +17,15 @@ create table if not exists regions (
   started_at timestamptz,                          -- 워커가 집어 간 때
   search_query text,                               -- AI 가 고친 네이버 검색어
   ai_note text,                                    -- 해석 이유 한 줄
-  suggestions jsonb                                -- 실패 시 AI 가 제안한 검색어 목록
+  suggestions jsonb,                               -- 실패 시 AI 가 제안한 검색어 목록
+  ai_excluded jsonb                                -- AI 가 제외한 비식당 업종 {categories, count}
 );
 
 create table if not exists region_aliases (
   query text primary key,
-  region_id bigint not null references regions(id) on delete cascade
+  region_id bigint not null references regions(id) on delete cascade,
+  want text,                                       -- 자연어 검색에서 원한 업종 ("한식집")
+  categories jsonb                                 -- 그에 맞는 네이버 업종 목록
 );
 
 create table if not exists places (

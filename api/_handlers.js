@@ -10,6 +10,7 @@ const publicRegion = (r) => ({
   id: r.id, name: r.name, status: r.status, error: r.error ?? null,
   source_name: r.source_name ?? null, polygon: r.polygon ?? null, bbox: r.bbox ?? null, created_at: r.created_at,
   search_query: r.search_query ?? null, ai_note: r.ai_note ?? null, suggestions: Array.isArray(r.suggestions) ? r.suggestions : [],
+  ai_excluded: r.ai_excluded ?? null,
 });
 
 export function createHandlers(repo, { now = () => Date.now() } = {}) {
@@ -61,7 +62,12 @@ export function createHandlers(repo, { now = () => Date.now() } = {}) {
           region = { ...region, status: 'failed', error };
         }
       }
-      const out = { region: publicRegion(region) };
+      const out = { region: publicRegion(region), filter: null };
+      const q = normalizeQuery(req.query.q);
+      if (q) {
+        const alias = await repo.findAlias(q);
+        if (alias?.want && Array.isArray(alias.categories)) out.filter = { want: alias.want, categories: alias.categories };
+      }
       if (region.status === 'ready') out.places = await repo.getRegionPlaces(region.id);
       res.status(200).json(out);
     },

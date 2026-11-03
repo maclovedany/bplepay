@@ -189,3 +189,14 @@ test('GET region exposes search_query, ai_note and suggestions', async () => {
   assert.equal(res.body.region.ai_note, '시·구를 붙임');
   assert.deepEqual(res.body.region.suggestions, ['대구 중구 교동']);
 });
+
+test('GET region with q returns the alias filter', async () => {
+  const repo = fakeRepo({ regions: { 1: { id: 1, name: '을지로', status: 'ready' } }, places: { 1: [] } });
+  repo.findAlias = async (q) => (q === '을지로 근처 한식집' ? { region_id: 1, want: '한식집', categories: ['한식'] } : null);
+  const res = fakeRes();
+  await createHandlers(repo).regionGet({ method: 'GET', query: { id: '1', q: ' 을지로 근처  한식집 ' } }, res);
+  assert.deepEqual(res.body.filter, { want: '한식집', categories: ['한식'] });
+  const res2 = fakeRes();
+  await createHandlers(repo).regionGet({ method: 'GET', query: { id: '1' } }, res2);
+  assert.equal(res2.body.filter, null);
+});

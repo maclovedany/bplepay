@@ -105,6 +105,10 @@ button { font: inherit; cursor: pointer; }
 .region-name { margin: 0; font-size: 20px; }
 .region-stats { margin: 6px 0 0; font-size: 13px; color: #444; }
 .region-ai { margin: 6px 0 0; font-size: 12px; color: #5b5bd6; background: #f3f3ff; border-radius: 6px; padding: 6px 8px; line-height: 1.4; }
+.region-excluded { margin: 6px 0 0; font-size: 12px; color: #777; }
+.cat-filter { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; background: #fff4e0; color: #a05a00; border: 1px solid #f3d9a8; border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 12px; font-weight: 600; }
+.cat-filter button { border: 0; background: transparent; color: inherit; font-size: 16px; line-height: 1; width: 28px; height: 28px; border-radius: 50%; }
+.cat-filter button:hover { background: rgba(0, 0, 0, 0.06); }
 .suggestions { margin: 0 0 12px; }
 .suggestion-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .suggestion-list button { border: 1px solid #c9c9f5; background: #f7f7ff; color: #3b3bb3; border-radius: 999px; padding: 8px 12px; min-height: 40px; font-size: 13px; }

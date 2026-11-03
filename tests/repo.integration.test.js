@@ -29,8 +29,11 @@ test('region lifecycle', { skip: !hasEnv && 'no supabase env' }, async () => {
   await repo.linkPlaces(r.id, [pid]);
   await repo.linkPlaces(r.id, [pid]); // duplicate link ignored
   await repo.markReady(r.id);
-  await repo.upsertAlias(q, r.id);
-  assert.equal((await repo.findAlias(q)).region_id, r.id);
+  await repo.upsertAlias(q, r.id, { want: '한식집', categories: ['한식'] });
+  assert.deepEqual(await repo.findAlias(q), { region_id: r.id, want: '한식집', categories: ['한식'] });
+  assert.deepEqual(await repo.getRegionCategories(r.id), ['한식']);
+  await repo.setRegionAi(r.id, { ai_excluded: { categories: ['미용실'], count: 2 } });
+  assert.deepEqual((await repo.getRegion(r.id)).ai_excluded, { categories: ['미용실'], count: 2 });
   assert.equal((await repo.findRegionBySourceKey(withPoly.source_key)).id, r.id);
   assert.equal((await repo.findRegionByQuery(q)).id, r.id);
   assert.ok((await repo.listRegions()).some((x) => x.id === r.id && x.polygon === undefined));
