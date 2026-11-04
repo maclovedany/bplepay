@@ -103,7 +103,7 @@
   let currentGu = GUS[0];
   function renderDaegu() {
     el.guTabs.innerHTML = '';
-    for (const gu of GUS) {
+    for (const gu of ['전체', ...GUS]) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip' + (gu === currentGu ? ' is-active' : '');
@@ -112,13 +112,22 @@
       el.guTabs.appendChild(b);
     }
     el.dongList.innerHTML = '';
-    for (const dong of window.DAEGU_DONGS[currentGu]) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = dong;
-      // 동 이름만으로는 다른 시와 겹칠 수 있어 "대구 중구 삼덕동" 꼴로 검색한다. 이미 수집한 곳이면 바로 열린다.
-      b.addEventListener('click', () => { el.input.value = `대구 ${currentGu} ${dong}`; el.clear.hidden = false; el.form.requestSubmit(); });
-      el.dongList.appendChild(b);
+    // '전체' 탭은 모든 구·군의 동을 구 이름 아래에 이어서 보여 준다.
+    for (const gu of currentGu === '전체' ? GUS : [currentGu]) {
+      if (currentGu === '전체') {
+        const h = document.createElement('h3');
+        h.className = 'dong-gu';
+        h.textContent = gu;
+        el.dongList.appendChild(h);
+      }
+      for (const dong of window.DAEGU_DONGS[gu]) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = dong;
+        // 동 이름만으로는 다른 시와 겹칠 수 있어 "대구 중구 삼덕동" 꼴로 검색한다. 이미 수집한 곳이면 바로 열린다.
+        b.addEventListener('click', () => { el.input.value = `대구 ${gu} ${dong}`; el.clear.hidden = false; el.form.requestSubmit(); });
+        el.dongList.appendChild(b);
+      }
     }
   }
   renderDaegu();
@@ -381,7 +390,7 @@
       btn.className = state.selected?.naver_id === p.naver_id ? 'is-selected' : '';
       const badge = p.survey === 'yes' ? '<span class="badge yes">가능</span>' : p.survey === 'no' ? '<span class="badge no">불가능</span>' : '<span class="badge none">미조사</span>';
       const dist = state.me ? `<span class="p-dist">${fmtDist(distanceTo(p))}</span>` : '';
-      const likes = p.likes ? `<span class="p-likes">👍 ${p.likes}</span>` : '';
+      const likes = `<span class="p-likes${p.likes ? '' : ' is-zero'}">👍 ${p.likes || 0}</span>`;
       btn.innerHTML = `<span class="p-name">${esc(p.name)}<span class="p-cat">${esc(p.category || '')}</span>${likes}</span>${badge}<span class="p-addr">${dist}${esc(p.road_address || p.address || '')}</span>`;
       btn.addEventListener('click', () => select(p, true));
       li.appendChild(btn);

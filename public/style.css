@@ -99,6 +99,8 @@ button { font: inherit; cursor: pointer; }
   padding: 6px 10px; min-height: 34px; font-size: 13px; font-weight: 600;
 }
 .dong-list button:hover { background: #e4f0fd; }
+.dong-gu { flex: 0 0 100%; margin: 8px 0 0; font-size: 12px; color: #666; font-weight: 700; }
+.dong-gu:first-child { margin-top: 0; }
 .view-head { padding: 12px 16px 8px; }
 .view-title { margin: 0; font-size: 16px; }
 .view-head .region-stats { color: #444; line-height: 1.5; }
@@ -158,6 +160,7 @@ body.is-resizing { user-select: none; cursor: col-resize; }
 .chip-near.is-active { background: var(--green); border-color: var(--green); color: #fff; }
 .chip-likes.is-active { background: #ff4d6d; border-color: #ff4d6d; color: #fff; }
 .p-likes { color: #d6336c; font-weight: 700; font-size: 12px; margin-left: 6px; white-space: nowrap; }
+.p-likes.is-zero { color: #b0b0b0; font-weight: 400; }
 .sheet-react { margin-left: auto; display: inline-flex; gap: 6px; }
 .btn-react { border: 1px solid var(--line); background: #fff; border-radius: 999px; min-height: 40px; padding: 0 12px; font-size: 14px; }
 .btn-react b { font-weight: 700; }
