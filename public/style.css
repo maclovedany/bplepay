@@ -88,18 +88,21 @@ button { font: inherit; cursor: pointer; }
 .panel-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .section-title { font-size: 13px; color: var(--gray); font-weight: 600; margin: 14px 16px 6px; }
 
-.recent-list { list-style: none; margin: 0; padding: 0; }
-.recent-list li { border-bottom: 1px solid var(--line); }
-.recent-list button {
-  width: 100%; text-align: left; background: none; border: 0; padding: 12px 16px;
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+/* 첫 화면: 대구 지역 바로가기 + 지도 화면 안 식당 */
+.daegu { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.gu-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 8px; scrollbar-width: none; }
+.gu-tabs::-webkit-scrollbar { display: none; }
+.gu-tabs .chip { flex: 0 0 auto; }
+.dong-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px; }
+.dong-list button {
+  border: 1px solid #cfe3f7; background: #f4f9ff; color: var(--blue); border-radius: 8px;
+  padding: 6px 10px; min-height: 34px; font-size: 13px; font-weight: 600;
 }
-.recent-list .r-name { color: var(--blue); font-weight: 600; font-size: 15px; }
-.recent-list .r-meta { color: var(--gray); font-size: 12px; white-space: nowrap; }
-.recent-list .r-status { font-size: 11px; padding: 2px 6px; border-radius: 10px; background: #f0f0f0; color: #666; }
-.recent-list .r-status.failed { background: #fdecec; color: #c0392b; }
-.recent-list .r-status.collecting { background: #e8f5ff; color: #1a73e8; }
-#recent-empty { padding: 20px 16px; }
+.dong-list button:hover { background: #e4f0fd; }
+.view-head { padding: 12px 16px 8px; }
+.view-title { margin: 0; font-size: 16px; }
+.view-head .region-stats { color: #444; line-height: 1.5; }
+.view-more { color: #a05a00; font-size: 12px; }
 
 .status { padding: 24px 16px; }
 .status-title { font-weight: 700; font-size: 15px; margin: 0 0 6px; }

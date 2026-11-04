@@ -22,10 +22,16 @@
       <div id="recent-chips" class="recent-chips" aria-label="최근 검색" hidden></div>
 
       <div id="panel-body" class="panel-body">
-        <section id="recent" class="recent">
-          <h2 class="section-title">최근 수집한 지역</h2>
-          <ul id="recent-regions" class="recent-list"></ul>
-          <p id="recent-empty" class="muted" hidden>아직 수집한 지역이 없습니다. 위에 지역 이름을 입력해 보세요.</p>
+        <section id="home" class="home">
+          <div class="daegu">
+            <h2 class="section-title">대구 지역 바로가기</h2>
+            <div id="gu-tabs" class="gu-tabs" role="tablist"></div>
+            <div id="dong-list" class="dong-list"></div>
+          </div>
+          <div class="view-head">
+            <h2 class="view-title">지도 화면 안 식당</h2>
+            <p id="view-stats" class="region-stats"></p>
+          </div>
         </section>
 
         <section id="status" class="status" hidden>
@@ -55,16 +61,19 @@
             </div>
             <p id="region-stats" class="region-stats"></p>
           </div>
+        </section>
+
+        <div id="places" class="places" hidden>
           <div id="filter-chips" class="chips" role="tablist">
             <button type="button" class="chip is-active" data-filter="all">전체</button>
-            <button type="button" class="chip" data-filter="none">미조사</button>
             <button type="button" class="chip" data-filter="yes">가능</button>
             <button type="button" class="chip" data-filter="no">불가능</button>
+            <button type="button" class="chip" data-filter="none">미조사</button>
             <button type="button" class="chip chip-near" data-sort="near" title="내 위치에서 가까운 순으로 정렬">가까운 순</button>
             <button type="button" class="chip chip-likes" data-sort="likes" title="좋아요 많은 순으로 정렬">좋아요 순</button>
           </div>
           <ul id="place-list" class="place-list"></ul>
-        </section>
+        </div>
       </div>
       <div id="sheet-handle" class="sheet-handle" aria-hidden="true"><span></span></div>
       <div id="panel-resizer" class="panel-resizer" title="드래그해서 너비 조절" aria-hidden="true"></div>
@@ -100,6 +109,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="/daegu.js"></script>
   <script src="/app.js"></script>
   <script src="/mascot.js"></script>
 </body>

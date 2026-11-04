@@ -18,6 +18,7 @@ function fakeRepo(seed = {}) {
     async resetToCollecting(id) { calls.push(['resetToCollecting', id]); Object.assign(regions.get(id), { status: 'collecting', error: null }); },
     async failRegion(id, error) { calls.push(['failRegion', id, error]); Object.assign(regions.get(Number(id)), { status: 'failed', error }); },
     async getRegionPlaces(id) { return seed.places?.[id] ?? []; },
+    async getPlacesInBbox(bbox, limit) { calls.push(['getPlacesInBbox', bbox, limit]); return { places: seed.view ?? [], truncated: false }; },
     async setSurvey(naverId, status) { calls.push(['setSurvey', naverId, status]); },
     async setReaction(naverId, deviceId, kind) { calls.push(['setReaction', naverId, deviceId, kind]); return { likes: kind === 'like' ? 1 : 0, dislikes: kind === 'dislike' ? 1 : 0 }; },
     async deleteRegion(id) { calls.push(['deleteRegion', Number(id)]); regions.delete(Number(id)); },
@@ -230,4 +231,21 @@ test('PUT reaction stores like / dislike / null per device and returns the count
   assert.deepEqual(res.body, { likes: 1, dislikes: 0 });
   await createHandlers(repo).reactionPut({ method: 'PUT', query: { naverId: 'a' }, body: { device_id: 'd1', kind: null } }, fakeRes());
   assert.deepEqual(repo.calls, [['setReaction', 'a', 'd1', 'like'], ['setReaction', 'a', 'd1', null]]);
+});
+
+test('GET places in view rejects a missing or malformed bbox', async () => {
+  for (const bbox of [undefined, '1,2,3', 'a,b,c,d', '129,35,128,36']) {
+    const repo = fakeRepo(); const res = fakeRes();
+    await createHandlers(repo).placesInView({ method: 'GET', query: { bbox } }, res);
+    assert.equal(res.statusCode, 400, String(bbox));
+    assert.equal(repo.calls.length, 0);
+  }
+});
+
+test('GET places in view passes the bbox and returns places with truncated flag', async () => {
+  const repo = fakeRepo({ view: [{ naver_id: 'a', name: 'A', survey: null, likes: 2 }] }); const res = fakeRes();
+  await createHandlers(repo).placesInView({ method: 'GET', query: { bbox: '128.59,35.86,128.61,35.87' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { places: [{ naver_id: 'a', name: 'A', survey: null, likes: 2 }], truncated: false });
+  assert.deepEqual(repo.calls[0][1], [128.59, 35.86, 128.61, 35.87]);
 });

@@ -6,6 +6,7 @@ const WAIT_MS = 3 * 60 * 1000;     // 워커가 집어 가지 않은 채 3분 �
 const RUN_MS = 10 * 60 * 1000;     // 집어 간 뒤 10분(식당 호출 최대 4번 × 2분 + 여유) → 수집 중 죽은 것으로 본다
 const REACTION_VALUES = new Set(['like', 'dislike', null]);
 const SURVEY_VALUES = new Set(['yes', 'no', null]);
+const VIEW_LIMIT = 3000;            // 지도 화면 안 식당을 한 번에 이만큼까지 보낸다. 넘으면 확대해 달라고 한다.
 
 const publicRegion = (r) => ({
   id: r.id, name: r.name, status: r.status, error: r.error ?? null,
@@ -71,6 +72,17 @@ export function createHandlers(repo, { now = () => Date.now() } = {}) {
       }
       if (region.status === 'ready') out.places = await repo.getRegionPlaces(region.id);
       res.status(200).json(out);
+    },
+
+    // 첫 화면: 지도에 보이는 범위(bbox=minLng,minLat,maxLng,maxLat) 안의 이미 수집된 식당
+    async placesInView(req, res) {
+      const bbox = String(req.query.bbox ?? '').split(',').map(Number);
+      const [minLng, minLat, maxLng, maxLat] = bbox;
+      if (bbox.length !== 4 || !bbox.every(Number.isFinite) || minLng > maxLng || minLat > maxLat) {
+        return res.status(400).json({ error: 'bbox must be minLng,minLat,maxLng,maxLat' });
+      }
+      const { places, truncated } = await repo.getPlacesInBbox(bbox, VIEW_LIMIT);
+      res.status(200).json({ places, truncated });
     },
 
     async regionDelete(req, res) {

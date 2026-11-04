@@ -3,7 +3,7 @@
   const $ = (id) => document.getElementById(id);
   const el = {
     panel: $('panel'), form: $('search-form'), input: $('search-input'), clear: $('search-clear'),
-    recent: $('recent'), recentList: $('recent-regions'), recentEmpty: $('recent-empty'), recentChips: $('recent-chips'),
+    home: $('home'), guTabs: $('gu-tabs'), dongList: $('dong-list'), viewStats: $('view-stats'), places: $('places'), recentChips: $('recent-chips'),
     status: $('status'), collecting: $('status-collecting'), failed: $('status-failed'), error: $('status-error'), retry: $('retry-btn'),
     region: $('region'), name: $('region-name'), source: $('region-source'), stats: $('region-stats'), ai: $('region-ai'),
     suggestions: $('suggestions'), suggestionList: $('suggestion-list'),
@@ -15,7 +15,7 @@
     btnLike: $('btn-like'), btnDislike: $('btn-dislike'), likeCount: $('like-count'), dislikeCount: $('dislike-count'),
   };
 
-  const state = { regionId: null, region: null, places: [], filter: 'all', selected: null, pollTimer: null, refreshTimer: null, query: '', catFilter: null, me: null, sort: null };  // sort: null | 'near' | 'likes'
+  const state = { mode: null, viewTruncated: false, regionId: null, region: null, places: [], filter: 'all', selected: null, pollTimer: null, refreshTimer: null, query: '', catFilter: null, me: null, sort: null };  // mode: 'home'(지도 화면 안 식당) | 'region'(검색한 지역). sort: null | 'near' | 'likes'
   const markers = new Map();
   let polygonLayer = null;
 
@@ -66,7 +66,7 @@
       meMarker = L.circleMarker([state.me.lat, state.me.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1a73e8', fillOpacity: 1 }).addTo(map);
       meMarker.bindTooltip('내 위치', { direction: 'top', offset: [0, -8] });
     } else meMarker.setLatLng([state.me.lat, state.me.lng]);
-    if (state.region) { renderList(); if (state.selected) renderSheet(state.selected); }
+    if (state.mode) { renderList(); if (state.selected) renderSheet(state.selected); }
   }
   // 위치를 한 번 요청한다. 성공하면 cb(true). 실패하면 알림을 띄우고 cb(false).
   function locate(cb = () => {}) {
@@ -90,29 +90,91 @@
     return body;
   };
 
-  // ---------- 초기 화면: 최근 지역 ----------
+  // ---------- 최근 검색 칩 ----------
   async function loadRecent() {
     try {
       const { regions } = await api('/api/regions');
       renderRecentChips(regions);
-      el.recentList.innerHTML = '';
-      el.recentEmpty.hidden = regions.length > 0;
-      for (const r of regions) {
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        const meta = r.stats ? `식당 ${r.stats.total} · 조사 ${r.stats.surveyed} · 가능 ${r.stats.yes}` : '';
-        const statusText = { collecting: '수집 중', failed: '실패', ready: '' }[r.status] ?? r.status;
-        btn.innerHTML = `<span class="r-name">${esc(r.name)}</span><span class="r-meta">${esc(meta)}${statusText ? ` <span class="r-status ${r.status}">${statusText}</span>` : ''}</span>`;
-        btn.addEventListener('click', () => openRegion(r.id));
-        li.appendChild(btn);
-        el.recentList.appendChild(li);
-      }
-    } catch (e) {
-      el.recentEmpty.hidden = false;
-      el.recentEmpty.textContent = '목록을 불러오지 못했습니다: ' + e.message;
+    } catch { /* 칩이 없어도 화면은 쓸 수 있다 */ }
+  }
+
+  // ---------- 첫 화면: 대구 지역 바로가기 + 지도 화면 안 식당 ----------
+  const GUS = Object.keys(window.DAEGU_DONGS || {});
+  let currentGu = GUS[0];
+  function renderDaegu() {
+    el.guTabs.innerHTML = '';
+    for (const gu of GUS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (gu === currentGu ? ' is-active' : '');
+      b.textContent = gu;
+      b.addEventListener('click', () => { currentGu = gu; renderDaegu(); });
+      el.guTabs.appendChild(b);
+    }
+    el.dongList.innerHTML = '';
+    for (const dong of window.DAEGU_DONGS[currentGu]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = dong;
+      // 동 이름만으로는 다른 시와 겹칠 수 있어 "대구 중구 삼덕동" 꼴로 검색한다. 이미 수집한 곳이면 바로 열린다.
+      b.addEventListener('click', () => { el.input.value = `대구 ${currentGu} ${dong}`; el.clear.hidden = false; el.form.requestSubmit(); });
+      el.dongList.appendChild(b);
     }
   }
+  renderDaegu();
+
+  const VIEW_MIN_ZOOM = 15;   // 이보다 멀리서 보면 식당이 너무 많아 불러오지 않는다
+  let viewSeq = 0;
+  function goHome() {
+    state.mode = 'home';
+    state.regionId = null; state.region = null; state.query = ''; state.catFilter = null;
+    clearTimeout(state.pollTimer);
+    clearInterval(state.refreshTimer);
+    el.status.hidden = true;
+    el.region.hidden = true;
+    el.home.hidden = false;
+    el.places.hidden = false;
+    if (polygonLayer) { map.removeLayer(polygonLayer); polygonLayer = null; }
+    closeSheet();
+    loadRecent();
+    loadView();
+  }
+
+  async function loadView() {
+    if (state.mode !== 'home') return;
+    const seq = ++viewSeq;
+    if (map.getZoom() < VIEW_MIN_ZOOM) { setViewPlaces([], false); return; }
+    const b = map.getBounds();
+    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => v.toFixed(5)).join(',');
+    try {
+      const { places, truncated } = await api('/api/places?bbox=' + bbox);
+      if (seq !== viewSeq || state.mode !== 'home') return;   // 그 사이 지도를 또 움직였거나 지역을 열었다
+      setViewPlaces(places, truncated);
+    } catch (e) {
+      if (seq === viewSeq) el.viewStats.textContent = '식당을 불러오지 못했습니다: ' + e.message;
+    }
+  }
+
+  // 화면 안 식당이 바뀌면 마커는 달라진 것만 더하고 뺀다 (지도를 움직일 때 깜빡이지 않게).
+  function setViewPlaces(places, truncated) {
+    state.viewTruncated = truncated;
+    state.places = places.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    const ids = new Set(state.places.map((p) => p.naver_id));
+    for (const [id, m] of markers) if (!ids.has(id)) { map.removeLayer(m); markers.delete(id); }
+    for (const p of state.places) {
+      if (markers.has(p.naver_id)) { markers.get(p.naver_id).off('click').on('click', () => select(p, false)); updateMarker(p); }
+      else addMarker(p);
+    }
+    if (state.selected) {
+      const same = state.places.find((p) => p.naver_id === state.selected.naver_id);
+      if (same) { state.selected = same; updateMarker(same); renderSheet(same); }
+    }
+    applyMarkerVisibility();
+    renderList();
+    renderHead();
+  }
+  let viewTimer = null;
+  map.on('moveend', () => { clearTimeout(viewTimer); viewTimer = setTimeout(loadView, 300); });
 
   // ---------- 검색 ----------
   el.form.addEventListener('submit', async (ev) => {
@@ -141,8 +203,9 @@
   });
 
   function showStatus(kind, message, suggestions = []) {
-    el.recent.hidden = true;
+    el.home.hidden = true;
     el.region.hidden = true;
+    el.places.hidden = true;
     el.status.hidden = false;
     el.collecting.hidden = kind !== 'collecting';
     el.failed.hidden = kind !== 'failed';
@@ -177,6 +240,7 @@
 
   // ---------- 지역 열기 / 폴링 ----------
   function openRegion(id, query = state.query) {
+    state.mode = 'region';
     state.regionId = id;
     state.query = query || '';
     location.hash = '#r=' + id + (state.query ? '&q=' + encodeURIComponent(state.query) : '');
@@ -231,8 +295,9 @@
     state.region = region;
     state.places = places.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     el.status.hidden = true;
-    el.recent.hidden = true;
+    el.home.hidden = true;
     el.region.hidden = false;
+    el.places.hidden = false;
     el.name.textContent = region.name;
     el.source.textContent = region.source_kind === 'public'
       ? `네이버에 구획이 없어 공공데이터(소상공인 상가정보)로 수집했습니다 · ${region.source_name || ''}`
@@ -274,7 +339,11 @@
     const total = pool.length;
     const yes = pool.filter((p) => p.survey === 'yes').length;
     const no = pool.filter((p) => p.survey === 'no').length;
-    el.stats.innerHTML = `식당 <b>${total}</b> · 조사 <b>${yes + no}</b> · 가능 <b>${yes}</b> · 불가능 <b>${no}</b>`;
+    const line = `식당 <b>${total}</b> · 조사 <b>${yes + no}</b> · 가능 <b>${yes}</b> · 불가능 <b>${no}</b>`;
+    if (state.mode !== 'home') { el.stats.innerHTML = line; return; }
+    if (map.getZoom() < VIEW_MIN_ZOOM) el.viewStats.textContent = '지도를 더 확대하면 이미 수집된 식당이 보입니다. 새 지역은 위에서 검색하거나 동을 누르세요.';
+    else if (!total) el.viewStats.textContent = '이 화면에는 수집된 식당이 없습니다. 위에서 동을 눌러 수집해 보세요.';
+    else el.viewStats.innerHTML = line + (state.viewTruncated ? ' <span class="view-more">· 일부만 표시 — 확대하면 전부 보입니다</span>' : '');
   }
 
   const matchesCat = (p) => !state.catFilter || state.catFilter.set.has(p.category);
@@ -474,10 +543,10 @@
   const hashQuery = () => { const q = location.hash.match(/[#&]q=([^&]+)/); return q ? decodeURIComponent(q[1]) : ''; };
   const m = location.hash.match(/#r=(\d+)/);
   if (m) openRegion(Number(m[1]), hashQuery());
-  else loadRecent();
+  else goHome();
   window.addEventListener('hashchange', () => {
     const mm = location.hash.match(/#r=(\d+)/);
     if (mm && Number(mm[1]) !== state.regionId) openRegion(Number(mm[1]), hashQuery());
-    if (!mm) { clearTimeout(state.pollTimer); clearInterval(state.refreshTimer); el.region.hidden = true; el.status.hidden = true; el.recent.hidden = false; loadRecent(); }
+    if (!mm) goHome();
   });
 })();
