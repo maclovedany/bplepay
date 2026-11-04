@@ -341,6 +341,8 @@
     const yes = pool.filter((p) => p.survey === 'yes').length;
     const no = pool.filter((p) => p.survey === 'no').length;
     const line = `식당 <b>${total}</b> · 조사 <b>${yes + no}</b> · 가능 <b>${yes}</b> · 불가능 <b>${no}</b>`;
+    const counts = { all: total, yes, no, none: total - yes - no };   // 필터 칩 옆 숫자
+    for (const c of el.chips.querySelectorAll('.chip[data-filter]')) c.querySelector('.chip-n').textContent = counts[c.dataset.filter];
     if (state.mode !== 'home') { el.stats.innerHTML = line; return; }
     if (map.getZoom() < VIEW_MIN_ZOOM) el.viewStats.textContent = '지도를 더 확대하면 이미 수집된 식당이 보입니다. 새 지역은 위에서 검색하거나 동을 누르세요.';
     else if (!total) el.viewStats.textContent = '이 화면에는 수집된 식당이 없습니다. 위에서 동을 눌러 수집해 보세요.';
