@@ -146,6 +146,7 @@
     if (map.getZoom() < VIEW_MIN_ZOOM) { setViewPlaces([], false); return; }
     const b = map.getBounds();
     const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => v.toFixed(5)).join(',');
+    if (!state.places.length) el.viewStats.textContent = '이 화면의 식당을 불러오는 중…';
     try {
       const { places, truncated } = await api('/api/places?bbox=' + bbox);
       if (seq !== viewSeq || state.mode !== 'home') return;   // 그 사이 지도를 또 움직였거나 지역을 열었다
